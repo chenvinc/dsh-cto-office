@@ -14,9 +14,23 @@
     "skills",
     "README.md"
   ],
+  "engines": {
+    "dsh": ">=0.2.2-rc.3",
+    "node": ">=22"
+  },
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
+    },
+    "compatibility": {
+      "dshReleases": {
+        "0.2.2-rc.1": "unknown",
+        "0.2.2-rc.2": "unknown",
+        "0.2.2-rc.3": "compatible"
+      },
+      "profiles": [
+        "web"
+      ]
     }
   }
 }

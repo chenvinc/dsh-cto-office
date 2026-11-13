@@ -66,8 +66,8 @@ plugin_manager action=install_bundle target=github:<你的账号>/dsh-cto-office
 
 对方机器需要满足：
 
-- **DSH ≥ 0.2.2**：要用到 agent preset 的 `order` 字段、`tool-subagent` 的 `allowedAgentPresets`、`tool-fs` 的 `write`/`edit` 开关、`agent-team` 的 `defaultEnabled`；更老的版本会在这几行上报 invalid config。
-- **Node 22**：patch 里解析技能目录的 `!!js` 用了 `process.getBuiltinModule`。
+- **DSH ≥ 0.2.2-rc.3**（`package.json` 的 `engines.dsh`）：要用到 agent preset 的 `order` 字段、`tool-subagent` 的 `allowedAgentPresets`、`tool-fs` 的 `write`/`edit` 开关、`agent-team` 的 `defaultEnabled`；更老的版本会在这几行上报 invalid config。
+- **Node ≥ 22**（`engines.node`）：patch 里解析技能目录的 `!!js` 用了 `process.getBuiltinModule`。
 - 这个包会把该 profile 的 `agent-team` 改成默认开启（见下文「关闭默认任务板」），介意的话装之前先删掉 `cordis.patch.yml` 开头那段覆盖。
 
 没有 git 也行：把整个目录拷过去，`plugin_manager action=install_bundle target=/绝对路径/cto-office`。
