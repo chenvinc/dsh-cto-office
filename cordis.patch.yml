@@ -1,0 +1,637 @@
+# CTO 办公室模式：一名 CTO 带六个岗位的 agent 预设集合。
+#
+# 第一段按 id 覆盖 base 里已有的 `agent-team` 行，把这个 profile 的团队任务板
+# 默认打开（会话菜单里仍可逐会话关闭）。后面七段各声明一个 agent preset：
+# 根是 cto-office，六个岗位是它派工时可选的子代理预设。
+#
+# 岗位的工具边界是真的：只读岗的 tool-fs 不挂 write/edit，写文件时工具根本不存在。
+# 每个预设自己挂 skill-filesystem，指向本包的 skills/ 目录。
+
+- id: agent-team
+  config:
+    maxTasks: 256
+    defaultEnabled: true
+
+- insert:
+    # ── CTO（根）──────────────────────────────────────────────────────────
+    - id: preset-cto-office
+      name: '@deepseek-ai/dsh-agent-preset'
+      config:
+        id: cto-office
+        name: CTO 办公室
+        description: 你当 CTO：接需求、拆卡、派工给六个岗位、验结果、带证据汇报。不亲自写实现。
+        order: 20
+        plugins:
+          - id: persona
+            name: '@deepseek-ai/dsh-persona'
+            config:
+              prefix: |
+                你是 CTO 办公室的 CTO，带一支六人团队：架构师、工程师、评审、QA、UI/UX 设计、业务。
+                你不写实现。你的产出是决定、任务卡、和带证据的结论。
+                接活先加载 skill cto-office：办公室章程（分工、六步、铁律、卡格式、派工模板）。
+                派工用 subagent 的 agent_preset；子代理看不到你的对话，卡的内容必须写进 prompt。
+          - id: agent-instructions
+            name: '@deepseek-ai/dsh-agent-instructions'
+            config:
+              maxBytes: 65536
+          - id: time-context
+            name: '@deepseek-ai/dsh-time-context'
+          - id: tool-bash
+            name: '@deepseek-ai/dsh-tool-bash'
+            disabled: !!js process.platform === 'win32'
+          - id: tool-pwsh
+            name: '@deepseek-ai/dsh-tool-pwsh'
+            disabled: !!js process.platform !== 'win32'
+          - id: tool-fs
+            name: '@deepseek-ai/dsh-tool-fs'
+            config:
+              applyPatch: false
+          - id: tool-fs-search
+            name: '@deepseek-ai/dsh-tool-fs-search'
+            config:
+              sampleOverCapGlobResults: false
+          - id: tool-jobs
+            name: '@deepseek-ai/dsh-tool-jobs'
+          - id: skill-filesystem
+            name: '@deepseek-ai/dsh-skill-filesystem'
+            config:
+              customSkillDirs:
+                - !!js |
+                  (() => {
+                    const fs = process.getBuiltinModule('node:fs');
+                    const path = process.getBuiltinModule('node:path');
+                    const url = process.getBuiltinModule('node:url');
+                    const { createRequire } = process.getBuiltinModule('node:module');
+                    const self = '@chy/dsh-cto-office';
+                    const hasSkills = dir => typeof dir === 'string' && fs.existsSync(path.join(dir, 'cto-office', 'SKILL.md'));
+                    const candidates = [];
+                    try { candidates.push(url.fileURLToPath(new URL('skills', baseUrl))); } catch {}
+                    try { candidates.push(path.join(url.fileURLToPath(new URL('.', baseUrl)), 'node_modules', self, 'skills')); } catch {}
+                    try { candidates.push(path.join(path.dirname(createRequire(baseUrl).resolve(self + '/package.json')), 'skills')); } catch {}
+                    try { const home = process.env.DSH_HOME; for (const profile of fs.readdirSync(path.join(home, 'profiles'))) candidates.push(path.join(home, 'profiles', profile, 'node_modules', self, 'skills')); } catch {}
+                    return candidates.find(hasSkills) ?? candidates[0];
+                  })()
+          - id: tool-skill
+            name: '@deepseek-ai/dsh-tool-skill'
+          - id: command-goal
+            name: '@deepseek-ai/dsh-command-goal'
+          - id: tool-goal
+            name: '@deepseek-ai/dsh-tool-goal'
+          - id: compaction
+            name: cordis:group
+            group: true
+            isolate:
+              compaction: true
+              toolResultPruner: true
+            config:
+              - id: compaction-basic
+                name: '@deepseek-ai/dsh-compaction-basic'
+              - id: command-compact
+                name: '@deepseek-ai/dsh-command-compact'
+              - id: tool-result-pruner
+                name: '@deepseek-ai/dsh-compaction-tool-result-pruner'
+                config:
+                  thresholdChars: 8192
+                  headChars: 4096
+                  tailChars: 1024
+          # 只有按岗位的派工：没有 fork（继承 CTO 的全量工具）与 workflow
+          # （没有角色槽位），办公室里的每个代理都必须有一个具名岗位。
+          - id: delegation
+            name: cordis:group
+            group: true
+            config:
+              - id: tool-subagent-control
+                name: '@deepseek-ai/dsh-tool-subagent-control'
+                config:
+                  interrupt: false
+              - id: tool-subagent
+                name: '@deepseek-ai/dsh-tool-subagent'
+                config:
+                  provider: spawn
+                  toolName: subagent
+                  modelSelection: true
+                  modelDiscovery: true
+                  agentPreset: cto-builder
+                  allowedAgentPresets:
+                    - cto-architect
+                    - cto-builder
+                    - cto-reviewer
+                    - cto-qa
+                    - cto-ux
+                    - cto-product
+          - id: tool-ask-user
+            name: '@deepseek-ai/dsh-tool-ask-user'
+          - id: tool-todo
+            name: '@deepseek-ai/dsh-tool-todo'
+            config:
+              allowParallelInProgress: true
+          - id: tool-web
+            name: '@deepseek-ai/dsh-tool-web'
+            config:
+              fetch: true
+              searchTimeoutMs: 60000
+          - id: present
+            name: '@deepseek-ai/dsh-tool-present'
+          - id: tool-office
+            name: '@deepseek-ai/dsh-tool-office'
+
+    # ── 架构师 ────────────────────────────────────────────────────────────
+    - id: preset-cto-architect
+      name: '@deepseek-ai/dsh-agent-preset'
+      config:
+        id: cto-architect
+        name: CTO 办公室 · 架构师
+        description: 只读调研，产出方案、接口契约、拆卡建议与风险清单；不改文件、不写实现。
+        order: 21
+        plugins:
+          - id: persona
+            name: '@deepseek-ai/dsh-persona'
+            config:
+              prefix: |
+                你是 CTO 办公室的架构师。你只有只读工具，负责方案、接口契约、任务拆解和风险清单；不写实现、不改文件。
+                开工先加载 skill cto-architect。
+                只返回结论与证据，不复述过程。
+          - id: agent-instructions
+            name: '@deepseek-ai/dsh-agent-instructions'
+            config:
+              maxBytes: 65536
+          - id: time-context
+            name: '@deepseek-ai/dsh-time-context'
+          - id: tool-bash
+            name: '@deepseek-ai/dsh-tool-bash'
+            disabled: !!js process.platform === 'win32'
+          - id: tool-pwsh
+            name: '@deepseek-ai/dsh-tool-pwsh'
+            disabled: !!js process.platform !== 'win32'
+          - id: tool-fs
+            name: '@deepseek-ai/dsh-tool-fs'
+            config:
+              write: false
+              edit: false
+              applyPatch: false
+          - id: tool-fs-search
+            name: '@deepseek-ai/dsh-tool-fs-search'
+            config:
+              sampleOverCapGlobResults: false
+          - id: skill-filesystem
+            name: '@deepseek-ai/dsh-skill-filesystem'
+            config:
+              customSkillDirs:
+                - !!js |
+                  (() => {
+                    const fs = process.getBuiltinModule('node:fs');
+                    const path = process.getBuiltinModule('node:path');
+                    const url = process.getBuiltinModule('node:url');
+                    const { createRequire } = process.getBuiltinModule('node:module');
+                    const self = '@chy/dsh-cto-office';
+                    const hasSkills = dir => typeof dir === 'string' && fs.existsSync(path.join(dir, 'cto-office', 'SKILL.md'));
+                    const candidates = [];
+                    try { candidates.push(url.fileURLToPath(new URL('skills', baseUrl))); } catch {}
+                    try { candidates.push(path.join(url.fileURLToPath(new URL('.', baseUrl)), 'node_modules', self, 'skills')); } catch {}
+                    try { candidates.push(path.join(path.dirname(createRequire(baseUrl).resolve(self + '/package.json')), 'skills')); } catch {}
+                    try { const home = process.env.DSH_HOME; for (const profile of fs.readdirSync(path.join(home, 'profiles'))) candidates.push(path.join(home, 'profiles', profile, 'node_modules', self, 'skills')); } catch {}
+                    return candidates.find(hasSkills) ?? candidates[0];
+                  })()
+          - id: tool-skill
+            name: '@deepseek-ai/dsh-tool-skill'
+          - id: tool-todo
+            name: '@deepseek-ai/dsh-tool-todo'
+            config:
+              allowParallelInProgress: true
+          - id: tool-web
+            name: '@deepseek-ai/dsh-tool-web'
+            config:
+              fetch: true
+              searchTimeoutMs: 60000
+          - id: compaction
+            name: cordis:group
+            group: true
+            isolate:
+              compaction: true
+              toolResultPruner: true
+            config:
+              - id: compaction-basic
+                name: '@deepseek-ai/dsh-compaction-basic'
+              - id: command-compact
+                name: '@deepseek-ai/dsh-command-compact'
+              - id: tool-result-pruner
+                name: '@deepseek-ai/dsh-compaction-tool-result-pruner'
+                config:
+                  thresholdChars: 8192
+                  headChars: 4096
+                  tailChars: 1024
+
+    # ── 工程师 ────────────────────────────────────────────────────────────
+    - id: preset-cto-builder
+      name: '@deepseek-ai/dsh-agent-preset'
+      config:
+        id: cto-builder
+        name: CTO 办公室 · 工程师
+        description: 按契约实现、小步自测、交可验证证据；不改契约与验收标准，不审自己的活。
+        order: 22
+        plugins:
+          - id: persona
+            name: '@deepseek-ai/dsh-persona'
+            config:
+              prefix: |
+                你是 CTO 办公室的工程师。你拿到一张卡和一份契约，把它做成能跑的东西，并交出可验证的证据。
+                你不审自己的活，不改契约，不改验收标准。
+                开工先加载 skill cto-builder。
+          - id: agent-instructions
+            name: '@deepseek-ai/dsh-agent-instructions'
+            config:
+              maxBytes: 65536
+          - id: time-context
+            name: '@deepseek-ai/dsh-time-context'
+          - id: tool-bash
+            name: '@deepseek-ai/dsh-tool-bash'
+            disabled: !!js process.platform === 'win32'
+          - id: tool-pwsh
+            name: '@deepseek-ai/dsh-tool-pwsh'
+            disabled: !!js process.platform !== 'win32'
+          - id: tool-fs
+            name: '@deepseek-ai/dsh-tool-fs'
+            config:
+              applyPatch: false
+          - id: tool-fs-search
+            name: '@deepseek-ai/dsh-tool-fs-search'
+            config:
+              sampleOverCapGlobResults: false
+          - id: tool-jobs
+            name: '@deepseek-ai/dsh-tool-jobs'
+          - id: skill-filesystem
+            name: '@deepseek-ai/dsh-skill-filesystem'
+            config:
+              customSkillDirs:
+                - !!js |
+                  (() => {
+                    const fs = process.getBuiltinModule('node:fs');
+                    const path = process.getBuiltinModule('node:path');
+                    const url = process.getBuiltinModule('node:url');
+                    const { createRequire } = process.getBuiltinModule('node:module');
+                    const self = '@chy/dsh-cto-office';
+                    const hasSkills = dir => typeof dir === 'string' && fs.existsSync(path.join(dir, 'cto-office', 'SKILL.md'));
+                    const candidates = [];
+                    try { candidates.push(url.fileURLToPath(new URL('skills', baseUrl))); } catch {}
+                    try { candidates.push(path.join(url.fileURLToPath(new URL('.', baseUrl)), 'node_modules', self, 'skills')); } catch {}
+                    try { candidates.push(path.join(path.dirname(createRequire(baseUrl).resolve(self + '/package.json')), 'skills')); } catch {}
+                    try { const home = process.env.DSH_HOME; for (const profile of fs.readdirSync(path.join(home, 'profiles'))) candidates.push(path.join(home, 'profiles', profile, 'node_modules', self, 'skills')); } catch {}
+                    return candidates.find(hasSkills) ?? candidates[0];
+                  })()
+          - id: tool-skill
+            name: '@deepseek-ai/dsh-tool-skill'
+          - id: tool-todo
+            name: '@deepseek-ai/dsh-tool-todo'
+            config:
+              allowParallelInProgress: true
+          - id: compaction
+            name: cordis:group
+            group: true
+            isolate:
+              compaction: true
+              toolResultPruner: true
+            config:
+              - id: compaction-basic
+                name: '@deepseek-ai/dsh-compaction-basic'
+              - id: command-compact
+                name: '@deepseek-ai/dsh-command-compact'
+              - id: tool-result-pruner
+                name: '@deepseek-ai/dsh-compaction-tool-result-pruner'
+                config:
+                  thresholdChars: 8192
+                  headChars: 4096
+                  tailChars: 1024
+
+    # ── 评审 ──────────────────────────────────────────────────────────────
+    - id: preset-cto-reviewer
+      name: '@deepseek-ai/dsh-agent-preset'
+      config:
+        id: cto-reviewer
+        name: CTO 办公室 · 评审
+        description: 只读审 diff 与契约一致性，跑测试验证，给出 PASS/CHANGES 与逐条证据；不替实现者改代码。
+        order: 23
+        plugins:
+          - id: persona
+            name: '@deepseek-ai/dsh-persona'
+            config:
+              prefix: |
+                你是 CTO 办公室的评审。你只有只读工具，唯一能改变状态的动作为跑测试和构建。
+                你的结论是闸门：PASS 或 CHANGES，不留中间态。
+                开工先加载 skill cto-reviewer。
+          - id: agent-instructions
+            name: '@deepseek-ai/dsh-agent-instructions'
+            config:
+              maxBytes: 65536
+          - id: time-context
+            name: '@deepseek-ai/dsh-time-context'
+          - id: tool-bash
+            name: '@deepseek-ai/dsh-tool-bash'
+            disabled: !!js process.platform === 'win32'
+          - id: tool-pwsh
+            name: '@deepseek-ai/dsh-tool-pwsh'
+            disabled: !!js process.platform !== 'win32'
+          - id: tool-fs
+            name: '@deepseek-ai/dsh-tool-fs'
+            config:
+              write: false
+              edit: false
+              applyPatch: false
+          - id: tool-fs-search
+            name: '@deepseek-ai/dsh-tool-fs-search'
+            config:
+              sampleOverCapGlobResults: false
+          - id: skill-filesystem
+            name: '@deepseek-ai/dsh-skill-filesystem'
+            config:
+              customSkillDirs:
+                - !!js |
+                  (() => {
+                    const fs = process.getBuiltinModule('node:fs');
+                    const path = process.getBuiltinModule('node:path');
+                    const url = process.getBuiltinModule('node:url');
+                    const { createRequire } = process.getBuiltinModule('node:module');
+                    const self = '@chy/dsh-cto-office';
+                    const hasSkills = dir => typeof dir === 'string' && fs.existsSync(path.join(dir, 'cto-office', 'SKILL.md'));
+                    const candidates = [];
+                    try { candidates.push(url.fileURLToPath(new URL('skills', baseUrl))); } catch {}
+                    try { candidates.push(path.join(url.fileURLToPath(new URL('.', baseUrl)), 'node_modules', self, 'skills')); } catch {}
+                    try { candidates.push(path.join(path.dirname(createRequire(baseUrl).resolve(self + '/package.json')), 'skills')); } catch {}
+                    try { const home = process.env.DSH_HOME; for (const profile of fs.readdirSync(path.join(home, 'profiles'))) candidates.push(path.join(home, 'profiles', profile, 'node_modules', self, 'skills')); } catch {}
+                    return candidates.find(hasSkills) ?? candidates[0];
+                  })()
+          - id: tool-skill
+            name: '@deepseek-ai/dsh-tool-skill'
+          - id: tool-todo
+            name: '@deepseek-ai/dsh-tool-todo'
+            config:
+              allowParallelInProgress: true
+          - id: compaction
+            name: cordis:group
+            group: true
+            isolate:
+              compaction: true
+              toolResultPruner: true
+            config:
+              - id: compaction-basic
+                name: '@deepseek-ai/dsh-compaction-basic'
+              - id: command-compact
+                name: '@deepseek-ai/dsh-command-compact'
+              - id: tool-result-pruner
+                name: '@deepseek-ai/dsh-compaction-tool-result-pruner'
+                config:
+                  thresholdChars: 8192
+                  headChars: 4096
+                  tailChars: 1024
+
+    # ── QA ────────────────────────────────────────────────────────────────
+    - id: preset-cto-qa
+      name: '@deepseek-ai/dsh-agent-preset'
+      config:
+        id: cto-qa
+        name: CTO 办公室 · QA
+        description: 按验收标准逐条实测，输出 PASS/FAIL 与每条的实测证据；不评审代码风格、不改代码。
+        order: 24
+        plugins:
+          - id: persona
+            name: '@deepseek-ai/dsh-persona'
+            config:
+              prefix: |
+                你是 CTO 办公室的 QA。你不看代码写得漂不漂亮，只看验收标准是否真的成立。
+                逐条实测，拿不到证据的条目不许标 PASS。
+                开工先加载 skill cto-qa。
+          - id: agent-instructions
+            name: '@deepseek-ai/dsh-agent-instructions'
+            config:
+              maxBytes: 65536
+          - id: time-context
+            name: '@deepseek-ai/dsh-time-context'
+          - id: tool-bash
+            name: '@deepseek-ai/dsh-tool-bash'
+            disabled: !!js process.platform === 'win32'
+          - id: tool-pwsh
+            name: '@deepseek-ai/dsh-tool-pwsh'
+            disabled: !!js process.platform !== 'win32'
+          - id: tool-fs
+            name: '@deepseek-ai/dsh-tool-fs'
+            config:
+              write: false
+              edit: false
+              applyPatch: false
+          - id: tool-fs-search
+            name: '@deepseek-ai/dsh-tool-fs-search'
+            config:
+              sampleOverCapGlobResults: false
+          - id: skill-filesystem
+            name: '@deepseek-ai/dsh-skill-filesystem'
+            config:
+              customSkillDirs:
+                - !!js |
+                  (() => {
+                    const fs = process.getBuiltinModule('node:fs');
+                    const path = process.getBuiltinModule('node:path');
+                    const url = process.getBuiltinModule('node:url');
+                    const { createRequire } = process.getBuiltinModule('node:module');
+                    const self = '@chy/dsh-cto-office';
+                    const hasSkills = dir => typeof dir === 'string' && fs.existsSync(path.join(dir, 'cto-office', 'SKILL.md'));
+                    const candidates = [];
+                    try { candidates.push(url.fileURLToPath(new URL('skills', baseUrl))); } catch {}
+                    try { candidates.push(path.join(url.fileURLToPath(new URL('.', baseUrl)), 'node_modules', self, 'skills')); } catch {}
+                    try { candidates.push(path.join(path.dirname(createRequire(baseUrl).resolve(self + '/package.json')), 'skills')); } catch {}
+                    try { const home = process.env.DSH_HOME; for (const profile of fs.readdirSync(path.join(home, 'profiles'))) candidates.push(path.join(home, 'profiles', profile, 'node_modules', self, 'skills')); } catch {}
+                    return candidates.find(hasSkills) ?? candidates[0];
+                  })()
+          - id: tool-skill
+            name: '@deepseek-ai/dsh-tool-skill'
+          - id: tool-todo
+            name: '@deepseek-ai/dsh-tool-todo'
+            config:
+              allowParallelInProgress: true
+          - id: compaction
+            name: cordis:group
+            group: true
+            isolate:
+              compaction: true
+              toolResultPruner: true
+            config:
+              - id: compaction-basic
+                name: '@deepseek-ai/dsh-compaction-basic'
+              - id: command-compact
+                name: '@deepseek-ai/dsh-command-compact'
+              - id: tool-result-pruner
+                name: '@deepseek-ai/dsh-compaction-tool-result-pruner'
+                config:
+                  thresholdChars: 8192
+                  headChars: 4096
+                  tailChars: 1024
+
+    # ── UI/UX 设计 ────────────────────────────────────────────────────────
+    - id: preset-cto-ux
+      name: '@deepseek-ai/dsh-agent-preset'
+      config:
+        id: cto-ux
+        name: CTO 办公室 · UI/UX 设计
+        description: 只读调研界面与使用路径，产出摩擦点清单、交互规格与可粘贴的 HTML/CSS 片段；不落盘、不碰代码。
+        order: 25
+        plugins:
+          - id: persona
+            name: '@deepseek-ai/dsh-persona'
+            config:
+              prefix: |
+                你是 CTO 办公室的 UI/UX 设计。你只读、只看、只写规格；代码片段以文本交回，落盘由工程师做。
+                摩擦点要有证据，规格要定义到每个状态。
+                开工先加载 skill cto-ux。
+          - id: agent-instructions
+            name: '@deepseek-ai/dsh-agent-instructions'
+            config:
+              maxBytes: 65536
+          - id: time-context
+            name: '@deepseek-ai/dsh-time-context'
+          - id: tool-bash
+            name: '@deepseek-ai/dsh-tool-bash'
+            disabled: !!js process.platform === 'win32'
+          - id: tool-pwsh
+            name: '@deepseek-ai/dsh-tool-pwsh'
+            disabled: !!js process.platform !== 'win32'
+          - id: tool-fs
+            name: '@deepseek-ai/dsh-tool-fs'
+            config:
+              write: false
+              edit: false
+              applyPatch: false
+          - id: tool-fs-search
+            name: '@deepseek-ai/dsh-tool-fs-search'
+            config:
+              sampleOverCapGlobResults: false
+          - id: skill-filesystem
+            name: '@deepseek-ai/dsh-skill-filesystem'
+            config:
+              customSkillDirs:
+                - !!js |
+                  (() => {
+                    const fs = process.getBuiltinModule('node:fs');
+                    const path = process.getBuiltinModule('node:path');
+                    const url = process.getBuiltinModule('node:url');
+                    const { createRequire } = process.getBuiltinModule('node:module');
+                    const self = '@chy/dsh-cto-office';
+                    const hasSkills = dir => typeof dir === 'string' && fs.existsSync(path.join(dir, 'cto-office', 'SKILL.md'));
+                    const candidates = [];
+                    try { candidates.push(url.fileURLToPath(new URL('skills', baseUrl))); } catch {}
+                    try { candidates.push(path.join(url.fileURLToPath(new URL('.', baseUrl)), 'node_modules', self, 'skills')); } catch {}
+                    try { candidates.push(path.join(path.dirname(createRequire(baseUrl).resolve(self + '/package.json')), 'skills')); } catch {}
+                    try { const home = process.env.DSH_HOME; for (const profile of fs.readdirSync(path.join(home, 'profiles'))) candidates.push(path.join(home, 'profiles', profile, 'node_modules', self, 'skills')); } catch {}
+                    return candidates.find(hasSkills) ?? candidates[0];
+                  })()
+          - id: tool-skill
+            name: '@deepseek-ai/dsh-tool-skill'
+          - id: tool-todo
+            name: '@deepseek-ai/dsh-tool-todo'
+            config:
+              allowParallelInProgress: true
+          - id: tool-web
+            name: '@deepseek-ai/dsh-tool-web'
+            config:
+              fetch: true
+              searchTimeoutMs: 60000
+          - id: compaction
+            name: cordis:group
+            group: true
+            isolate:
+              compaction: true
+              toolResultPruner: true
+            config:
+              - id: compaction-basic
+                name: '@deepseek-ai/dsh-compaction-basic'
+              - id: command-compact
+                name: '@deepseek-ai/dsh-command-compact'
+              - id: tool-result-pruner
+                name: '@deepseek-ai/dsh-compaction-tool-result-pruner'
+                config:
+                  thresholdChars: 8192
+                  headChars: 4096
+                  tailChars: 1024
+
+    # ── 业务 / 产品 ───────────────────────────────────────────────────────
+    - id: preset-cto-product
+      name: '@deepseek-ai/dsh-agent-preset'
+      config:
+        id: cto-product
+        name: CTO 办公室 · 业务
+        description: 从真实使用场景出发，把模糊需求变成需求假设、成功指标与可测验收标准；不替用户排优先级。
+        order: 26
+        plugins:
+          - id: persona
+            name: '@deepseek-ai/dsh-persona'
+            config:
+              prefix: |
+                你是 CTO 办公室的业务岗。你的作用是拦住"用户说要 X 就做 X"。
+                你产出需求假设、成功指标、可测的验收标准草案，以及必须问人的问题。
+                开工先加载 skill cto-product。
+          - id: agent-instructions
+            name: '@deepseek-ai/dsh-agent-instructions'
+            config:
+              maxBytes: 65536
+          - id: time-context
+            name: '@deepseek-ai/dsh-time-context'
+          - id: tool-bash
+            name: '@deepseek-ai/dsh-tool-bash'
+            disabled: !!js process.platform === 'win32'
+          - id: tool-pwsh
+            name: '@deepseek-ai/dsh-tool-pwsh'
+            disabled: !!js process.platform !== 'win32'
+          - id: tool-fs
+            name: '@deepseek-ai/dsh-tool-fs'
+            config:
+              write: false
+              edit: false
+              applyPatch: false
+          - id: tool-fs-search
+            name: '@deepseek-ai/dsh-tool-fs-search'
+            config:
+              sampleOverCapGlobResults: false
+          - id: skill-filesystem
+            name: '@deepseek-ai/dsh-skill-filesystem'
+            config:
+              customSkillDirs:
+                - !!js |
+                  (() => {
+                    const fs = process.getBuiltinModule('node:fs');
+                    const path = process.getBuiltinModule('node:path');
+                    const url = process.getBuiltinModule('node:url');
+                    const { createRequire } = process.getBuiltinModule('node:module');
+                    const self = '@chy/dsh-cto-office';
+                    const hasSkills = dir => typeof dir === 'string' && fs.existsSync(path.join(dir, 'cto-office', 'SKILL.md'));
+                    const candidates = [];
+                    try { candidates.push(url.fileURLToPath(new URL('skills', baseUrl))); } catch {}
+                    try { candidates.push(path.join(url.fileURLToPath(new URL('.', baseUrl)), 'node_modules', self, 'skills')); } catch {}
+                    try { candidates.push(path.join(path.dirname(createRequire(baseUrl).resolve(self + '/package.json')), 'skills')); } catch {}
+                    try { const home = process.env.DSH_HOME; for (const profile of fs.readdirSync(path.join(home, 'profiles'))) candidates.push(path.join(home, 'profiles', profile, 'node_modules', self, 'skills')); } catch {}
+                    return candidates.find(hasSkills) ?? candidates[0];
+                  })()
+          - id: tool-skill
+            name: '@deepseek-ai/dsh-tool-skill'
+          - id: tool-todo
+            name: '@deepseek-ai/dsh-tool-todo'
+            config:
+              allowParallelInProgress: true
+          - id: tool-web
+            name: '@deepseek-ai/dsh-tool-web'
+            config:
+              fetch: true
+              searchTimeoutMs: 60000
+          - id: compaction
+            name: cordis:group
+            group: true
+            isolate:
+              compaction: true
+              toolResultPruner: true
+            config:
+              - id: compaction-basic
+                name: '@deepseek-ai/dsh-compaction-basic'
+              - id: command-compact
+                name: '@deepseek-ai/dsh-command-compact'
+              - id: tool-result-pruner
+                name: '@deepseek-ai/dsh-compaction-tool-result-pruner'
+                config:
+                  thresholdChars: 8192
+                  headChars: 4096
+                  tailChars: 1024

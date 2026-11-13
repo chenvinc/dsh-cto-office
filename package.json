@@ -1,0 +1,22 @@
+{
+  "name": "@chy/dsh-cto-office",
+  "version": "0.1.0",
+  "description": "CTO 办公室模式：一名 CTO 带六个岗位（架构师、工程师、评审、QA、UI/UX 设计、业务）的 agent 预设集合",
+  "type": "module",
+  "license": "MIT",
+  "exports": {
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./skills/*": "./skills/*",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "cordis.patch.yml",
+    "skills",
+    "README.md"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}
