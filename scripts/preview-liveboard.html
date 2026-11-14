@@ -15,7 +15,7 @@
   .pv-note{padding:6px 12px;color:#6f8090;font-size:11px;border-bottom:1px solid #232c37}
   .pv-note b{color:#f2c66d;font-weight:600}
   .pv-wrap{display:flex;justify-content:center;padding:16px}
-  .pv-frame{width:340px;height:720px;border:1px solid #232c37;border-radius:10px;overflow:hidden}
+  .pv-frame{width:420px;height:720px;border:1px solid #232c37;border-radius:10px;overflow:hidden}
   #host{height:100%}
   .pv-out{margin:0 12px 16px;padding:8px 10px;border:1px solid #232c37;border-radius:8px;background:#0b1016;font:11px/1.5 ui-monospace,Menlo,monospace;color:#94a3b2;white-space:pre-wrap;max-height:240px;overflow:auto}
 </style>
@@ -163,6 +163,106 @@ window.__ModuleLoader__ = {
     return row({ type: 'turn/end', seq: seq, time: time, data: {} })
   }
 
+  /* 真形 tool/result：callId 在 data.message.source.callId（PTC 才在 data.subCallId）。
+   * 面板必须认这个形状，旧 fixture 的 data.callId 只是历史遗留。 */
+  function toolResultReal(seq, time, callId, text) {
+    return row({
+      type: 'tool/result',
+      seq: seq,
+      time: time,
+      data: { message: { content: [{ type: 'text', text: text }], source: { callId: callId } } }
+    })
+  }
+
+  function askCall(seq, time, callId) {
+    return toolCall(seq, time, 'ask_user_question', {
+      questions: [{ id: 'q1', text: '允许我改 client.js 吗？', options: ['允许', '先别动'] }]
+    }, callId)
+  }
+
+  function askResult(seq, time, callId, pending) {
+    return toolResultReal(seq, time, callId, JSON.stringify({ questionIds: ['q1'], answers: pending ? [] : ['允许'], pending: pending }))
+  }
+
+  /* 2500 字原始行：验证「单条上限 2000 + 显式截断说明」 */
+  var BIG_TEXT = new Array(2501).join('长')
+
+  function askResultRaw(seq, time, callId, payload, opts) {
+    var o = opts || {}
+    var message = {
+      content: o.content || [{ type: 'text', text: JSON.stringify(payload) }],
+      source: { callId: callId }
+    }
+    if (o.isError) message.isError = true
+    return row({ type: 'tool/result', seq: seq, time: time, data: { message: message } })
+  }
+
+  function askTwo(seq, time, callId) {
+    return toolCall(seq, time, 'ask_user_question', {
+      questions: [
+        { id: 'q1', text: '允许我改 client.js 吗？', options: ['允许', '先别动'] },
+        { id: 'q2', text: '要不要顺手补测试？', options: ['要', '不要'] }
+      ]
+    }, callId)
+  }
+
+  function askReply(seq, time, callId) {
+    return row({
+      type: 'user/message',
+      seq: seq,
+      time: time,
+      data: { role: 'user', content: [{ type: 'text', text: '允许' }], source: { kind: 'user-question-reply', callId: callId, outcome: 'answered' } }
+    })
+  }
+
+  /* 181 字的证据正文：用来钉「看原始回执」承诺的全文（改前只看到前 90 字）。
+   * 长度写死在 LONG_EVIDENCE_LEN 里，断言时逐字比对，避免文案改了读数还对不上。 */
+  var LONG_EVIDENCE = '这次审下来问题不少：第一处是空数组会抛异常，在 client.js 的 842 行附近，需要先判 length 再取第一项；第二处是摘要行把同一个子会话数了三遍，要只数闸门角色的卡；第三处是折叠态只挂最近三张，但闸门 chip 必须露出来；另外展开态逐档量过 600/480/380/340/300 五档宽度，都没有横向滚动条，300 宽度也不横向滚动，确认无误'
+  var LONG_EVIDENCE_LEN = 181
+  /* 写死字数的无换行汉字串：窄档里 45–60 字正好被 3 行 clamp 裁掉一行，
+   * 按钮必须按实测溢出出现，不能按字数猜（评审 P2-1）。 */
+  function cjkBody(n) {
+    var seed = '这次审下来问题不少第一处是空数组会抛异常需要先判长度再取第一项第二处是摘要行把同一个子会话数了三遍'
+    var s = seed
+    while (s.length < n) s += seed
+    return s.slice(0, n)
+  }
+
+  /* 带逐条意见的回执：chip 应读成「要改 3」，B 层应列 3 条 */
+  function opinionReceipt() {
+    return [
+      '审完了：改了 2 个文件，跑了 1 条命令',
+      '1. [P1] client.js:842 — 空数组会抛异常',
+      '建议：先判 length 再取第一项',
+      '2. [P2] client.js:910 — 摘要行重复计数',
+      '建议：只数闸门角色的卡',
+      '3. [P3] README.md:12 — 示例命令过期',
+      '证据：npm run check exit 0',
+      '证据：' + LONG_EVIDENCE,
+      'GATE: CHANGES'
+    ].join('\n')
+  }
+
+  function opinionRound() {
+    return [
+      user(101, T0 + 5000, '审这版 diff'),
+      toolCall(102, T0 + 6000, 'read', { file_path: 'client.js' }, 'r1'),
+      toolResult(103, T0 + 6500, 'r1', '…'),
+      toolCall(109, T0 + 6800, 'edit', { file_path: 'client.js' }, 'w1'),
+      toolResult(110, T0 + 7000, 'w1', 'ok'),
+      toolCall(104, T0 + 7000, 'read', { file_path: 'scripts/preview-liveboard.html' }, 'r2'),
+      toolResult(105, T0 + 7500, 'r2', '…'),
+      toolCall(106, T0 + 8000, 'bash', { command: 'npm run check' }, 'k1'),
+      toolResult(107, T0 + 11000, 'k1', 'exit 0'),
+      toolResult(111, T0 + 12000, 'big1', BIG_TEXT),
+      toolResult(131, T0 + 12500, 'w2', cjkBody(45)),
+      toolResult(132, T0 + 12600, 'w3', cjkBody(55)),
+      toolResult(133, T0 + 12700, 'w4', cjkBody(60)),
+      toolResult(134, T0 + 12800, 'w5', cjkBody(70)),
+      assistant(108, T0 + 30000, opinionReceipt())
+    ]
+  }
+
   /* ── 4. 场景数据 ── */
   var T0 = 1731574800000
 
@@ -184,7 +284,9 @@ window.__ModuleLoader__ = {
       user(101, T0 + 5000, text),
       toolCall(102, T0 + 6000, 'bash', { command: 'npm run check', description: '跑校验' }, 'k1'),
       toolResult(103, T0 + 9000, 'k1', 'patch sha256=97c7728 ok'),
-      assistant(104, T0 + 30000, gate ? (text + '\nGATE: ' + gate) : (text + ' 完成'))
+      /* 带判定的那一轮回执后面接一段长正文：用来钉「单条默认 3 行、点开才是全文」，
+       * 也让 B 层「看原始回执」有东西可展开（首行仍是轮次名，轮次头读数不受影响）。 */
+      assistant(104, T0 + 30000, gate ? (text + '\n' + LONG_EVIDENCE + '\nGATE: ' + gate) : (text + ' 完成'))
     ]
     return entries
   }
@@ -317,6 +419,45 @@ window.__ModuleLoader__ = {
         toolResult(15, T0 + 3000, 's1', 'token=sk-live-abcdef0123456789 ok'),
         assistant(16, T0 + 4000, '已收到，密钥不该出现在面板里'),
         turnEnd(17, T0 + 4000)
+      ]
+      children = [
+        { id: 'child-builder', mode: 'continuable', preset: 'cto-builder', label: '工程师 · 实现右栏', events: childRound('实现信息流面板', '') }
+      ]
+    }
+    /* 有逐条意见的 CHANGES：chip 要读「要改 3」，展开区要有 A→F 六层 */
+    if (name === 'review-opinions') {
+      running = true
+      rootEvents = rootRound({ gate: 'CHANGES' })
+      children = [
+        { id: 'child-builder', mode: 'continuable', preset: 'cto-builder', label: '工程师 · 实现右栏', events: childRound('实现信息流面板', '') },
+        { id: 'child-review-1', mode: 'continuable', preset: 'cto-reviewer', label: '评审 · 第 1 轮', events: childRound('初审 diff', '') },
+        { id: 'child-review-4', mode: 'continuable', preset: 'cto-reviewer', label: '评审 · 终审', events: opinionRound() }
+      ]
+    }
+    /* P0：callId 配对。先答完（不应出横幅）→ 再改成 pending（应出）→ 再来一条迟到答复（应消失） */
+    if (name === 'confirm') {
+      running = true
+      rootEvents = [
+        user(12, T0, '把右栏信息流做成真组件'),
+        askCall(13, T0 + 1000, 'q1'),
+        askResult(14, T0 + 2000, 'q1', false),
+        assistant(15, T0 + 3000, '收到，继续。'),
+        turnEnd(16, T0 + 3000)
+      ]
+      children = [
+        { id: 'child-builder', mode: 'continuable', preset: 'cto-builder', label: '工程师 · 实现右栏', events: childRound('实现信息流面板', '') }
+      ]
+    }
+    /* 可关提示：confirm + window 两条横幅，× 关闭后要落 sessionStorage、重挂仍关 */
+    if (name === 'dismiss') {
+      running = true
+      hasMore = true
+      rootEvents = [
+        user(12, T0, '把右栏信息流做成真组件'),
+        askCall(13, T0 + 1000, 'q1'),
+        askResult(14, T0 + 2000, 'q1', true),
+        assistant(15, T0 + 3000, '等你确认再动 client.js。'),
+        turnEnd(16, T0 + 3000)
       ]
       children = [
         { id: 'child-builder', mode: 'continuable', preset: 'cto-builder', label: '工程师 · 实现右栏', events: childRound('实现信息流面板', '') }
@@ -470,6 +611,18 @@ window.__ModuleLoader__ = {
   /* ── 6. 读数 ── */
   function panelEl() { return document.querySelector('.co-panel') }
 
+  /* 只拼可见子节点：三档宽度靠 CSS 隐藏 chip 的某几段，textContent 会把它们也算进来 */
+  function visibleText(el) {
+    var out = ''
+    Array.prototype.forEach.call(el.childNodes, function (node) {
+      if (node.nodeType === 3) { out += node.textContent; return }
+      if (node.nodeType !== 1) return
+      if (window.getComputedStyle(node).display === 'none') return
+      out += visibleText(node)
+    })
+    return out
+  }
+
   function readings() {
     var panel = panelEl()
     var cards = Array.prototype.slice.call(document.querySelectorAll('.co-card'))
@@ -491,7 +644,24 @@ window.__ModuleLoader__ = {
         return { role: card.getAttribute('data-role'), last: last ? last.textContent.replace(/\s+/g, ' ').trim() : '' }
       }),
       gateChips: Array.prototype.map.call(document.querySelectorAll('.co-gate'), function (chip) {
-        return chip.textContent.replace(/\s+/g, ' ').trim()
+        return visibleText(chip).replace(/\s+/g, ' ').trim()
+      }),
+      gateChipsMeta: Array.prototype.map.call(document.querySelectorAll('.co-gate'), function (chip) {
+        var card = chip.closest('.co-card')
+        return {
+          role: card ? card.getAttribute('data-role') : null,
+          tag: chip.tagName,
+          gate: chip.getAttribute('data-gate'),
+          text: visibleText(chip).replace(/\s+/g, ' ').trim(),
+          title: chip.getAttribute('title') || ''
+        }
+      }),
+      moreButtons: Array.prototype.map.call(document.querySelectorAll('.co-more-btn'), function (n) {
+        return { text: n.textContent.trim(), expanded: n.getAttribute('aria-expanded') }
+      }),
+      rawEvents: document.querySelectorAll('.co-ev').length,
+      layers: Array.prototype.map.call(document.querySelectorAll('.co-card[data-expanded="true"] .co-body [data-layer], .co-card[data-expanded="true"] [data-layer]'), function (n) {
+        return n.getAttribute('data-layer')
       }),
       collapsedGateChanges: !!document.querySelector('.co-card[data-expanded="false"][data-gate="CHANGES"]'),
       runs: document.querySelectorAll('.co-run').length,
@@ -504,27 +674,89 @@ window.__ModuleLoader__ = {
       hasStack: panel ? panel.getAttribute('data-has-stack') : null,
       elapsed: (function () { var el = document.querySelector('[data-elapsed]'); return el ? el.getAttribute('data-elapsed') : null })(),
       unknownCard: !!document.querySelector('.co-card[data-role="unknown"]'),
+      /* 摘要行的预算是正文 ≤72 / 整行 ≤100；E 层原始事件按新契约给全文（只受 2000 上限约束），
+       * 所以长度统计必须把 .co-raw 里的行分开算，否则「摘要预算」这条断言会被原始行撑破。 */
       lineStats: (function () {
-        var lines = Array.prototype.map.call(document.querySelectorAll('.co-ev-t'), function (n) { return n.textContent.replace(/\s+/g, ' ').length })
-        var bodies = Array.prototype.map.call(document.querySelectorAll('.co-ev-b'), function (n) { return n.textContent.replace(/\s+/g, ' ').length })
+        function collect(nodes) {
+          var out = []
+          for (var i = 0; i < nodes.length; i += 1) {
+            var node = nodes[i]
+            var raw = !!(node.closest && node.closest('.co-raw'))
+            out.push({ len: node.textContent.replace(/\s+/g, ' ').length, raw: raw })
+          }
+          return out
+        }
+        function maxOf(list) {
+          return list.length ? Math.max.apply(null, list.map(function (x) { return x.len })) : 0
+        }
+        var lastNodes = document.querySelectorAll('.co-last')
+        var lastLens = []
+        for (var li = 0; li < lastNodes.length; li += 1) lastLens.push(lastNodes[li].textContent.replace(/\s+/g, ' ').trim().length)
+        var lines = collect(document.querySelectorAll('.co-ev-t'))
+        var bodies = collect(document.querySelectorAll('.co-ev-b'))
+        var sumLines = lines.filter(function (x) { return !x.raw })
+        var sumBodies = bodies.filter(function (x) { return !x.raw })
+        var rawBodies = bodies.filter(function (x) { return x.raw })
         return {
           events: lines.length,
-          maxLine: lines.length ? Math.max.apply(null, lines) : 0,
-          maxBody: bodies.length ? Math.max.apply(null, bodies) : 0,
-          overLine: lines.filter(function (n) { return n > 100 }).length,
-          overBody: bodies.filter(function (n) { return n > 72 }).length
+          maxLine: maxOf(sumLines),
+          maxBody: maxOf(sumBodies),
+          overLine: sumLines.filter(function (x) { return x.len > 100 }).length,
+          overBody: sumBodies.filter(function (x) { return x.len > 72 }).length,
+          rawEvents: rawBodies.length,
+          rawMaxBody: maxOf(rawBodies),
+          lastMax: lastLens.length ? Math.max.apply(null, lastLens) : 0,
+          lastCount: lastLens.length,
+          rawOver: rawBodies.filter(function (x) { return x.len > 2030 }).length
+        }
+      })(),
+      /* 3 行 clamp 的出口不许靠字数猜：任何被裁掉一行的正文，那一行里必须有「展开全文」。
+       * 全文态（data-full="true"）不裁，所以不参与判定（那时按钮是「收起」）。 */
+      rowBtn: (function () {
+        var rows = Array.prototype.slice.call(document.querySelectorAll('.co-ev'))
+        var out = []
+        for (var i = 0; i < rows.length; i += 1) {
+          var b = rows[i].querySelector('.co-ev-b')
+          if (!b) continue
+          if (b.getAttribute('data-full') === 'true') continue
+          var ch = b.clientHeight
+          var sh = b.scrollHeight
+          if (!ch) continue
+          var need = sh > ch + 1
+          out.push({
+            seq: rows[i].getAttribute('data-seq'),
+            len: b.textContent.length,
+            ch: ch,
+            sh: sh,
+            need: need,
+            btn: !!rows[i].querySelector('.co-ev-btn')
+          })
+        }
+        return {
+          rows: out.length,
+          clipped: out.filter(function (x) { return x.need }).length,
+          missing: out.filter(function (x) { return x.need && !x.btn }).length,
+          extra: out.filter(function (x) { return !x.need && x.btn }).length,
+          bad: out.filter(function (x) { return (x.need && !x.btn) || (!x.need && x.btn) })
         }
       })(),
       redacted: (document.getElementById('host').innerHTML.match(/‹已隐藏›/g) || []).length,
       secretHits: (document.getElementById('host').innerHTML.match(/sk-live|ghp_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|AKIA[0-9A-Z]{16}|Bearer\s+[A-Za-z0-9._~+/=-]{8,}/g) || []).length,
       strips: Array.prototype.map.call(document.querySelectorAll('.co-strip'), function (s) {
+        var body = s.querySelector('.co-strip-t')
         return {
           strip: s.getAttribute('data-strip') || 'window',
           show: s.getAttribute('data-show') === 'true',
           tone: s.getAttribute('data-tone'),
-          text: s.textContent.replace(/\s+/g, ' ').trim().slice(0, 80)
+          hasClose: !!s.querySelector('.co-strip-x'),
+          text: (body ? body.textContent : s.textContent).replace(/\s+/g, ' ').trim().slice(0, 90)
         }
-      })
+      }),
+      footNote: (function () {
+        var n = document.querySelector('[data-foot-note]')
+        return n ? n.textContent.replace(/\s+/g, ' ').trim() : ''
+      })(),
+      legendOpen: !!document.querySelector('.co-legend')
     }
   }
 
@@ -542,6 +774,9 @@ window.__ModuleLoader__ = {
     await wait(80)
 
     var report = { scenario: name, firstPaint: readings() }
+    /* 根卡折叠摘要：第一眼那句人话（P2-3 的读数就落在这个字段上） */
+    var rootLastEl = document.querySelector('.co-card[data-role="cto-office"] .co-last')
+    report.rootLastText = rootLastEl ? rootLastEl.textContent.replace(/\s+/g, ' ').trim() : null
 
     /* 宽度先量：crash 场景后面会点「重试」，先把兜底卡在五档宽度下的读数拿到 */
     report.retain = Object.assign({}, retainStats)
@@ -559,10 +794,34 @@ window.__ModuleLoader__ = {
         state: p ? p.getAttribute('data-state') : null,
         scrollWidth: p ? p.scrollWidth : null,
         clientWidth: p ? p.clientWidth : null,
-        fits: !!(p && p.scrollWidth === p.clientWidth)
+        fits: !!(p && p.scrollWidth === p.clientWidth),
+        chips: Array.prototype.map.call(document.querySelectorAll('.co-gate'), function (chip) {
+          return visibleText(chip).replace(/\s+/g, ' ').trim()
+        })
       })
     }
-    frame.style.width = '340px'
+    frame.style.width = '420px'
+
+    /* chip 三形态：≤359 只留「符号 + 条数」，≥560 必须是全称「! 要改 3 · CHANGES」，
+     * 360–559 是中间档，不判定但把读数记下来。原来这里只断言不溢出，chip 文案写错也能过。 */
+    report.chipForms = report.widths.map(function (w) { return { width: w.width, chips: w.chips } })
+    var narrowBad = []
+    var wideBad = []
+    report.widths.forEach(function (w) {
+      (w.chips || []).forEach(function (text) {
+        if (w.width <= 359) {
+          /* 窄档（≤359）：判定态只剩符号+数字；待判定反过来，只剩文字「待判定」（单个点读者读不懂）。 */
+          /* 窄档（≤359）：带条数的只剩符号+数字；没有条数的判定态给文字（要改/待判定），单个符号读者读不懂。 */
+          if (text !== '待判定' && text !== '要改' && !/^(✓|!|✕)( \d+)?$/.test(text)) narrowBad.push(w.width + ':' + text)
+        } else if (w.width >= 560) {
+          if (!/^(✓|!|✕) (通过|要改|未过)( \d+)? · (PASS|CHANGES|FAIL)$/.test(text) && text !== '· 待判定') {
+            wideBad.push(w.width + ':' + text)
+          }
+        }
+      })
+    })
+    report.chipFormsOk = narrowBad.length === 0 && wideBad.length === 0
+    report.chipFormsBad = { narrow: narrowBad, wide: wideBad }
 
     if (name === 'crash') {
       report.consoleErrorCount = errors.length
@@ -610,12 +869,13 @@ window.__ModuleLoader__ = {
       var unknownHead = document.querySelector('.co-card[data-role="unknown"] .co-card-head')
       if (unknownHead) unknownHead.click()
       await wait(80)
-      var unknownRun = document.querySelector('.co-card[data-role="unknown"] .co-run')
+      var unknownBody = document.querySelector('.co-card[data-role="unknown"] .co-body-inner')
+      var unknownBodyText = unknownBody ? unknownBody.textContent.replace(/\s+/g, ' ').trim() : ''
       report.unknownExpanded = {
         expanded: !!document.querySelector('.co-card[data-role="unknown"][data-expanded="true"]'),
-        runs: document.querySelectorAll('.co-card[data-role="unknown"] .co-run').length,
+        layers: document.querySelectorAll('.co-card[data-role="unknown"] [data-layer]').length,
         events: document.querySelectorAll('.co-card[data-role="unknown"] .co-ev').length,
-        runText: unknownRun ? unknownRun.textContent : null,
+        runText: unknownBodyText || null,
         title: document.querySelector('.co-card[data-role="unknown"] .co-role') ? document.querySelector('.co-card[data-role="unknown"] .co-role').textContent : null
       }
       /* 子会话必须仍在展开列表里（一行 run，带它的 label 或 id）；它没订阅上事件是因为 ready 被拒，
@@ -623,11 +883,19 @@ window.__ModuleLoader__ = {
       report.presetFaultOk = !!report.presetFaultUnknownText &&
         report.presetFaultUnknownText.indexOf('未识别（agentPreset 投影不可用）') === 0 &&
         pf.cards === 8 && !!(report.presetFaultStrip[0] && report.presetFaultStrip[0].show) &&
-        !!report.unknownCard && report.unknownExpanded.runs === 1 &&
+        !!report.unknownCard && report.unknownExpanded.layers >= 1 &&
         !!report.unknownExpanded.runText &&
-        (report.unknownExpanded.runText.indexOf('不明岗位') >= 0 || report.unknownExpanded.runText.indexOf('child-mystery') >= 0) &&
+        report.unknownExpanded.runText.indexOf('不明岗位') >= 0 &&
         report.unknownExpanded.runText.indexOf('子会话读取失败') >= 0 &&
         document.querySelector('.co-card[data-role="unknown"]').textContent.indexOf('agentPreset 投影不可用') >= 0
+      var presetX = document.querySelector('[data-strip="preset-fault"] .co-strip-x')
+      /* 前置：点之前那条 strip 与它的 × 必须真的在，否则「关掉后没 strip」是恒真废话 */
+      report.presetDismissPrecondition = { strip: !!document.querySelector('[data-strip="preset-fault"]'), x: !!presetX }
+      if (presetX) presetX.click()
+      await wait(100)
+      report.presetDismiss = { strips: readings().strips.map(function (x) { return x.strip }) }
+      report.presetDismissOk = report.presetDismissPrecondition.strip && report.presetDismissPrecondition.x &&
+        report.presetDismiss.strips.length === 0
     }
 
     if (name === 'empty-window') {
@@ -635,8 +903,10 @@ window.__ModuleLoader__ = {
       var ew = readings()
       report.emptyWindowSummary = ew.summary
       report.emptyWindowChips = ew.gateChips
+      report.emptyWindowChipTags = ew.gateChipsMeta.map(function (c) { return c.tag })
       report.emptyWindowOk = ew.summary.indexOf('0 道闸') >= 0 && ew.summary.indexOf('2 待判定') >= 0 &&
-        ew.gateChips.length === 2 && ew.gateChips.every(function (c) { return c.indexOf('待判定') >= 0 })
+        ew.gateChips.length === 2 && ew.gateChips.every(function (c) { return c.indexOf('待判定') >= 0 }) &&
+        report.emptyWindowChipTags.every(function (t) { return t === 'SPAN' })
     }
 
     if (name === 'offbook-preset') {
@@ -661,15 +931,37 @@ window.__ModuleLoader__ = {
       await wait(220)
       report.retainPeakCollapsed = Object.assign({}, retainStats)
       report.retainPeakTheoretical = 10
-      report.retainPeakOk = retainStats.peak === 10
+      var moreBtn = document.querySelector('.co-card[data-role="cto-builder"] .co-more-btn') ||
+        document.querySelector('.co-more-btn')
+      var peakBeforeMore = retainStats.peak
+      var focusAtClick = null
+      if (moreBtn) {
+        moreBtn.focus()
+        moreBtn.click()
+        focusAtClick = document.activeElement === moreBtn
+      }
+      await wait(200)
+      report.retainPeakAfterMore = {
+        peak: retainStats.peak,
+        active: retainStats.active,
+        opened: !!document.querySelector('.co-rounds'),
+        focusStays: document.activeElement === moreBtn,
+        focusAtClick: focusAtClick,
+        activeClass: document.activeElement ? String(document.activeElement.className) : ''
+      }
+      report.retainPeakOk = peakBeforeMore === 10 && retainStats.peak <= 10
       report.cardRows = readings().cardRows
     }
 
     if (name === 'privacy') {
-      /* 展开根卡，让 300 字 prompt 与带凭据的 bash 调用都进 DOM 再量 */
+      /* 原始事件默认收起：展开根卡 → 再展开它的原始事件，凭据与长行才会真的进 DOM。
+       * 不能批量点（点第一个就重渲染，后面的节点已卸载）。 */
       var rootHead = document.querySelector('.co-card[data-role="cto-office"] .co-card-head')
       if (rootHead) rootHead.click()
-      await wait(100)
+      await wait(140)
+      var rootRaw = document.querySelector('.co-card[data-role="cto-office"] .co-raw-btn')
+      if (rootRaw) rootRaw.click()
+      await wait(180)
       var pr = readings()
       report.privacy = {
         secretHits: pr.secretHits,
@@ -678,21 +970,36 @@ window.__ModuleLoader__ = {
         maxBody: pr.lineStats.maxBody,
         overLine: pr.lineStats.overLine,
         overBody: pr.lineStats.overBody,
-        events: pr.lineStats.events
+        events: pr.lineStats.events,
+        rawMaxBody: pr.lineStats.rawMaxBody,
+        rawOver: pr.lineStats.rawOver,
+        lastMax: pr.lineStats.lastMax
       }
-      report.privacyOk = pr.secretHits === 0 && pr.redacted > 0 && pr.lineStats.maxLine <= 100 && pr.lineStats.maxBody <= 72 && pr.lineStats.events >= 5
+      /* E 层现在给全文，唯一展开的行都在 .co-raw 里（所以 maxLine/maxBody 是 0 行）；
+       * 摘要预算改由折叠行的 .co-last 兜，原始行只受 2000 上限约束。 */
+      report.privacyOk = pr.secretHits === 0 && pr.redacted > 0 && pr.lineStats.rawOver === 0 &&
+        pr.lineStats.lastMax <= 100 && pr.lineStats.events >= 5
     }
 
     if (name === 'partial') {
-      /* 单轮场景（评审只有 1 个子会话）：不带轮次号 */
+      /* 单轮场景（评审只有 1 个子会话）：契约为准，照样带「第 1 轮」，不再开特例 */
       var singleText = (readings().lastTexts.filter(function (x) { return x.role === 'cto-reviewer' })[0] || {}).last || ''
       report.singleRoundText = singleText
-      report.singleRoundOk = singleText.indexOf('第 ') < 0 && singleText.indexOf('终审') >= 0
+      report.singleRoundOk = singleText.indexOf('第 1 轮') >= 0 && singleText.indexOf('终审') >= 0
       var fallbackReading = readings()
       report.elapsedDegraded = fallbackReading.elapsed
       report.partialFaultStrip = fallbackReading.strips.filter(function (x) { return x.strip === 'fault' && x.show })
       report.partialOk = fallbackReading.state === 'live' && fallbackReading.elapsed === '—' &&
         report.partialFaultStrip.length === 1 && fallbackReading.cards === 7
+      var faultX = document.querySelector('[data-strip="fault"] .co-strip-x')
+      if (faultX) faultX.click()
+      await wait(100)
+      var afterFault = readings()
+      report.faultDismiss = {
+        strips: afterFault.strips.map(function (x) { return x.strip }),
+        storage: sessionStorage.getItem('cto-office/feed-dismiss@1:session-root')
+      }
+      report.faultDismissOk = afterFault.strips.length === 0 && report.faultDismiss.storage.indexOf('部分内容未算出') >= 0
     }
 
     if (name === 'live' || name === 'ended') {
@@ -743,6 +1050,260 @@ window.__ModuleLoader__ = {
       }
       report.gateChipsOk = report.gateChips.length === 2 && !report.rootCard.hasChip && !!report.rootCard.dataGate
       report.retainExpanded = Object.assign({}, retainStats)
+    }
+
+    if (name === 'review-opinions') {
+      /* chip = 「要改 3」且可点；点后展开并把焦点送到 B 层（意见） */
+      var ro = readings()
+      var chipMeta = (ro.gateChipsMeta.filter(function (c) { return c.role === 'cto-reviewer' })[0]) || {}
+      report.opinionChip = chipMeta
+      var reviewChip = document.querySelector('.co-card[data-role="cto-reviewer"] .co-gate')
+      var chipIsButton = !!reviewChip && reviewChip.tagName === 'BUTTON'
+      if (reviewChip) reviewChip.click()
+      await wait(120)
+      var afterChip = readings()
+      var activeAfter = document.activeElement
+      var bodyEl = document.querySelector('.co-card[data-role="cto-reviewer"] .co-body')
+      var bodyText = bodyEl ? bodyEl.textContent.replace(/\s+/g, ' ') : ''
+      report.chipOpened = {
+        expanded: !!document.querySelector('.co-card[data-role="cto-reviewer"][data-expanded="true"]'),
+        chipIsButton: chipIsButton,
+        focusClass: activeAfter ? String(activeAfter.className) : '',
+        focusLayer: activeAfter ? activeAfter.getAttribute('data-layer') : null,
+        layers: afterChip.layers,
+        opinions: document.querySelectorAll('.co-card[data-role="cto-reviewer"] .co-opinion').length,
+        rawBeforeClick: afterChip.rawEvents
+      }
+      var orderKeys = ['改了 1 个文件', '要改 3 处，最高 P1', '意见 · 共 3 条', '做了什么', '证据', '原始事件']
+      var positions = orderKeys.map(function (k) { return bodyText.indexOf(k) })
+      report.opinionOrder = positions
+      report.opinionOrderOk = positions.every(function (p, i) { return p >= 0 && (i === 0 || p > positions[i - 1]) })
+      report.rawHiddenByDefault = afterChip.rawEvents === 0
+      /* 「看原始回执」承诺全文：181 字证据正文的尾串在展开原始事件后必须 indexOf >= 0；
+       * 2500 字的回执必须带「已截断，共 N 字符」而不是悄悄少一截。 */
+      report.longText = {
+        len: LONG_EVIDENCE_LEN,
+        evidenceFull: bodyText.indexOf(LONG_EVIDENCE) >= 0,
+        dLayerTail: bodyText.indexOf('300 宽度也不横向滚动') >= 0
+      }
+      var rawBtn = document.querySelector('.co-card[data-role="cto-reviewer"] .co-raw-btn')
+      if (rawBtn) rawBtn.click()
+      await wait(90)
+      var afterRaw = readings()
+      report.afterRaw = { rawEvents: afterRaw.rawEvents }
+      var rawEl = document.querySelector('.co-card[data-role="cto-reviewer"] .co-raw')
+      var rawText = rawEl ? rawEl.textContent.replace(/\s+/g, ' ') : ''
+      report.longText.rawFull = rawText.indexOf(LONG_EVIDENCE) >= 0
+      report.longText.rawTail = rawText.indexOf('300 宽度也不横向滚动') >= 0
+      report.longText.rawLen = rawText.length
+      report.longText.truncNote = rawText.indexOf('已截断，共 2500 字符') >= 0
+      report.longTextOk = report.longText.len === 181 && report.longText.evidenceFull &&
+        report.longText.dLayerTail && report.longText.rawFull && report.longText.rawTail && report.longText.truncNote
+      /* 四档宽度逐行判「被裁了就必须有出口」（300/340/400/600）。fixture 里 131–134 是 45/55/60/70 字。
+       * 判据原样照评审给的：scrollHeight > clientHeight 的行必须存在 .co-ev-btn，相等则必须没有。 */
+      report.rowBtnWidths = []
+      var rbWidths = [600, 400, 340, 300]
+      for (var rw = 0; rw < rbWidths.length; rw += 1) {
+        frame.style.width = rbWidths[rw] + 'px'
+        void frame.offsetWidth
+        await wait(140)
+        var rb = readings().rowBtn
+        report.rowBtnWidths.push({
+          width: rbWidths[rw],
+          rows: rb.rows,
+          clipped: rb.clipped,
+          missing: rb.missing,
+          extra: rb.extra,
+          fixtures: Array.prototype.map.call(document.querySelectorAll('.co-card[data-role="cto-reviewer"] .co-ev'), function (row) {
+            var b = row.querySelector('.co-ev-b')
+            if (!b || b.getAttribute('data-full') === 'true') return null
+            var seq = String(row.getAttribute('data-seq'))
+            if (['131', '132', '133', '134'].indexOf(seq) < 0) return null
+            return { seq: seq, len: b.textContent.length, ch: b.clientHeight, sh: b.scrollHeight, btn: !!row.querySelector('.co-ev-btn') }
+          }).filter(function (x) { return !!x })
+        })
+      }
+      frame.style.width = '420px'
+      void frame.offsetWidth
+      await wait(140)
+      report.rowBtnOk = report.rowBtnWidths.length === 4 && report.rowBtnWidths.every(function (w) {
+        return w.rows > 0 && w.missing === 0 && w.extra === 0
+      })
+
+      /* 单条默认 3 行：展开 E 层后每条 data-full 都必须是 false，长的才有「展开全文」；
+       * 点开只影响那一条（不是整片展开）。 */
+      var evBodies = document.querySelectorAll('.co-card[data-role="cto-reviewer"] .co-ev-b')
+      var fullNow = document.querySelectorAll('.co-card[data-role="cto-reviewer"] .co-ev-b[data-full="true"]').length
+      var moreBtns = document.querySelectorAll('.co-card[data-role="cto-reviewer"] .co-ev-btn')
+      report.rowCollapse = { rows: evBodies.length, collapsed: evBodies.length - fullNow, full: fullNow, moreBtns: moreBtns.length }
+      var expandBtn = null
+      for (var mb = 0; mb < moreBtns.length; mb += 1) {
+        var own = moreBtns[mb].parentNode
+        if (own && own.getAttribute('data-seq') === '111') { expandBtn = moreBtns[mb]; break }
+      }
+      if (expandBtn) expandBtn.click()
+      await wait(90)
+      var bigRow = document.querySelector('.co-card[data-role="cto-reviewer"] .co-ev[data-seq="111"]')
+      var bigBtn = bigRow ? bigRow.querySelector('.co-ev-btn') : null
+      report.rowExpand = {
+        hadButton: !!expandBtn,
+        full: bigRow && bigRow.querySelector('.co-ev-b').getAttribute('data-full'),
+        btnText: bigBtn ? bigBtn.textContent : '',
+        btnExpanded: bigBtn ? bigBtn.getAttribute('aria-expanded') : null,
+        fullRowsAfter: document.querySelectorAll('.co-card[data-role="cto-reviewer"] .co-ev-b[data-full="true"]').length
+      }
+      report.rowExpandOk = report.rowCollapse.collapsed === report.rowCollapse.rows &&
+        report.rowCollapse.moreBtns >= 1 && report.rowExpand.hadButton &&
+        report.rowExpand.full === 'true' && report.rowExpand.btnText === '收起' &&
+        report.rowExpand.btnExpanded === 'true' && report.rowExpand.fullRowsAfter === 1
+      if (bigBtn) bigBtn.click()
+      await wait(60)
+      var wideChips = (report.widths.filter(function (w) { return w.width === 600 })[0] || {}).chips || []
+      report.opinionWideChip = wideChips[0] || ''
+      /* B 层「看原始回执」= 一步到全文：展开 E 层 + 回执那条 data-full=true + 焦点进条目。
+       * 用 live 场景（评审卡只有判定、没有逐条意见，B 层才是这个按钮）。 */
+      mount(scene('live'))
+      await wait(160)
+      var liveHead = document.querySelector('.co-card[data-role="cto-reviewer"] .co-card-head')
+      if (liveHead) liveHead.click()
+      await wait(140)
+      var receiptBtn = document.querySelector('.co-card[data-role="cto-reviewer"] .co-receipt-btn')
+      report.receiptJump = { hasBtn: !!receiptBtn }
+      if (receiptBtn) {
+        receiptBtn.click()
+        await wait(160)
+        var liveCard = document.querySelector('.co-card[data-role="cto-reviewer"]')
+        var act = document.activeElement
+        var fullRows = liveCard.querySelectorAll('.co-ev-b[data-full="true"]')
+        report.receiptJump.rawOpen = !!liveCard.querySelector('.co-raw')
+        report.receiptJump.fullRows = fullRows.length
+        report.receiptJump.focusIsRow = !!(act && act.classList && act.classList.contains('co-ev'))
+        report.receiptJump.focusSeq = act && act.getAttribute ? act.getAttribute('data-seq') : null
+        report.receiptJump.clampOff = fullRows.length ? getComputedStyle(fullRows[0]).webkitLineClamp : ''
+        report.receiptJump.collapsedRows = liveCard.querySelectorAll('.co-ev-b[data-full="false"]').length
+      }
+      report.receiptJumpOk = report.receiptJump.hasBtn && report.receiptJump.rawOpen === true &&
+        report.receiptJump.fullRows === 1 && report.receiptJump.focusIsRow === true &&
+        String(report.receiptJump.clampOff) === 'none'
+      report.opinionsOk = chipIsButton && String(report.opinionWideChip).indexOf('要改 3') >= 0 &&
+        report.chipOpened.focusLayer === 'b' && report.chipOpened.opinions === 3 &&
+        report.rawHiddenByDefault && afterRaw.rawEvents >= 4 && report.opinionOrderOk && report.longTextOk &&
+        report.rowExpandOk && report.receiptJumpOk && report.rowBtnOk
+      /* 上面为了验 B 层一键落全文临时挂过 live；挂回本场景，后面的读数才是 review-opinions 的。 */
+      mount(scene('review-opinions'))
+      await wait(120)
+    }
+
+    if (name === 'confirm') {
+      /* P0：配对照真形 callId；pending=true 不算答完；迟到答复算答完 */
+      var answered = readings().strips.filter(function (x) { return x.strip === 'confirm' })
+      report.confirmAnswered = { strips: answered.length }
+      world.sessions[sc.rootId].source._set(windowOf([
+        user(12, T0, '把右栏信息流做成真组件'),
+        askCall(13, T0 + 1000, 'q1'),
+        askResult(14, T0 + 2000, 'q1', true),
+        assistant(15, T0 + 3000, '收到，继续。'),
+        turnEnd(16, T0 + 3000)
+      ], false))
+      await wait(90)
+      var pendingStrips = readings().strips.filter(function (x) { return x.strip === 'confirm' })
+      report.confirmPending = { strips: pendingStrips.length, text: pendingStrips[0] ? pendingStrips[0].text : '' }
+      world.sessions[sc.rootId].source._set(windowOf([
+        user(12, T0, '把右栏信息流做成真组件'),
+        askCall(13, T0 + 1000, 'q1'),
+        askResult(14, T0 + 2000, 'q1', true),
+        askReply(17, T0 + 2500, 'q1'),
+        assistant(15, T0 + 3000, '收到，继续。'),
+        turnEnd(16, T0 + 3000)
+      ], false))
+      await wait(90)
+      var lateStrips = readings().strips.filter(function (x) { return x.strip === 'confirm' })
+      report.confirmLate = { strips: lateStrips.length }
+      /* P2-4：失败/畸形的复述不算「答完了」，横幅必须还亮着。
+       * 三种口径照 DSH question-reply.ts：isError、content 形状、answers 条数。 */
+      var malformedCases = [
+        {
+          name: 'isError',
+          rows: [user(12, T0, '把右栏信息流做成真组件'), askCall(13, T0 + 1000, 'q1'),
+            askResultRaw(14, T0 + 2000, 'q1', { answers: ['允许'] }, { isError: true }),
+            assistant(15, T0 + 3000, '收到。'), turnEnd(16, T0 + 3000)]
+        },
+        {
+          name: 'content-shape',
+          rows: [user(12, T0, '把右栏信息流做成真组件'), askCall(13, T0 + 1000, 'q1'),
+            askResultRaw(14, T0 + 2000, 'q1', { answers: ['允许'] }, {
+              content: [{ type: 'text', text: JSON.stringify({ answers: ['允许'] }) }, { type: 'text', text: '（多出来的一段）' }]
+            }),
+            assistant(15, T0 + 3000, '收到。'), turnEnd(16, T0 + 3000)]
+        },
+        {
+          name: 'answers-count',
+          rows: [user(12, T0, '把右栏信息流做成真组件'), askTwo(13, T0 + 1000, 'q3'),
+            askResultRaw(14, T0 + 2000, 'q3', { answers: ['允许'] }),
+            assistant(15, T0 + 3000, '收到。'), turnEnd(16, T0 + 3000)]
+        }
+      ]
+      report.confirmMalformed = []
+      for (var mc = 0; mc < malformedCases.length; mc += 1) {
+        world.sessions[sc.rootId].source._set(windowOf(malformedCases[mc].rows, false))
+        await wait(90)
+        report.confirmMalformed.push({
+          name: malformedCases[mc].name,
+          strips: readings().strips.filter(function (x) { return x.strip === 'confirm' }).length
+        })
+      }
+      report.confirmMalformedOk = report.confirmMalformed.every(function (x) { return x.strips === 1 })
+      report.confirmOk = report.confirmAnswered.strips === 0 && report.confirmPending.strips === 1 && report.confirmLate.strips === 0
+    }
+
+    if (name === 'dismiss') {
+      var d0 = readings()
+      report.dismissBefore = {
+        strips: d0.strips.map(function (x) { return x.strip + (x.hasClose ? '+x' : '') }),
+        footNote: d0.footNote,
+        storage: sessionStorage.getItem('cto-office/feed-dismiss@1:session-root')
+      }
+      /* window 关掉 → 降级成页脚一行；confirm 关掉 → 条件渲染里彻底消失 */
+      var windowX = document.querySelector('[data-strip="window"] .co-strip-x')
+      if (windowX) windowX.click()
+      await wait(90)
+      var d1 = readings()
+      report.dismissWindow = { strips: d1.strips.map(function (x) { return x.strip }), footNote: d1.footNote }
+      var confirmX = document.querySelector('[data-strip="confirm"] .co-strip-x')
+      if (confirmX) confirmX.click()
+      await wait(90)
+      var d2 = readings()
+      report.dismissConfirm = {
+        strips: d2.strips.map(function (x) { return x.strip }),
+        storage: sessionStorage.getItem('cto-office/feed-dismiss@1:session-root')
+      }
+      /* 同 session 重新挂载：两条都还关着 */
+      sessionStorage.removeItem('cto-office/legend-seen@1')
+      mount(scene('dismiss'))
+      await wait(140)
+      var d3 = readings()
+      report.dismissAfterRemount = { strips: d3.strips.map(function (x) { return x.strip + (x.hasClose ? '+x' : '') }), footNote: d3.footNote }
+      /* 换一个 callId 的新问题：必须重新弹 */
+      world.sessions[sc.rootId].source._set(windowOf([
+        user(12, T0, '把右栏信息流做成真组件'),
+        askCall(13, T0 + 1000, 'q1'),
+        askResult(14, T0 + 2000, 'q1', true),
+        askCall(20, T0 + 4000, 'q2'),
+        askResult(21, T0 + 5000, 'q2', true),
+        assistant(15, T0 + 3000, '等第二个问题。'),
+        turnEnd(16, T0 + 3000)
+      ], true))
+      await wait(110)
+      var d4 = readings()
+      report.dismissNewCall = { strips: d4.strips.map(function (x) { return x.strip }) }
+      report.dismissOk = report.dismissBefore.strips.length === 2 &&
+        report.dismissBefore.strips.indexOf('confirm+x') >= 0 && report.dismissBefore.strips.indexOf('window+x') >= 0 &&
+        report.dismissWindow.strips.indexOf('window') < 0 && report.dismissWindow.footNote.indexOf('数据不完整') >= 0 &&
+        report.dismissConfirm.strips.indexOf('confirm') < 0 &&
+        !!report.dismissConfirm.storage && report.dismissConfirm.storage.indexOf('q1') >= 0 &&
+        report.dismissAfterRemount.strips.indexOf('confirm+x') < 0 &&
+        report.dismissAfterRemount.strips.indexOf('window+x') < 0 &&
+        report.dismissNewCall.strips.indexOf('confirm') >= 0
     }
 
     if (name === 'live') {
@@ -798,7 +1359,7 @@ window.__ModuleLoader__ = {
     log('handoff.id=' + handoff.id + ' sheets=' + JSON.stringify(sheetNames))
     log('module.inject=' + JSON.stringify(moduleInject))
     var reports = []
-    var names = ['live', 'ended', 'empty-window', 'window-partial', 'retain-fail', 'partial', 'preset-fault', 'offbook-preset', 'retain-peak', 'privacy', 'crash']
+    var names = ['live', 'ended', 'empty-window', 'window-partial', 'retain-fail', 'partial', 'preset-fault', 'offbook-preset', 'retain-peak', 'privacy', 'review-opinions', 'confirm', 'dismiss', 'crash']
     for (var i = 0; i < names.length; i += 1) {
       var report = await runScenario(names[i])
       reports.push(report)
@@ -863,6 +1424,7 @@ window.__ModuleLoader__ = {
       },
       retainPeak: {
         collapsed: byName('retain-peak').retainPeakCollapsed,
+        afterMore: byName('retain-peak').retainPeakAfterMore,
         theoretical: byName('retain-peak').retainPeakTheoretical,
         ok: byName('retain-peak').retainPeakOk
       },
@@ -874,11 +1436,59 @@ window.__ModuleLoader__ = {
       partialElapsed: byName('partial').elapsedDegraded,
       partialOk: byName('partial').partialOk,
       partialFaultStrip: byName('partial').partialFaultStrip,
+      faultDismiss: byName('partial').faultDismiss,
+      faultDismissOk: byName('partial').faultDismissOk,
+      presetDismiss: byName('preset-fault').presetDismiss,
+      presetDismissOk: byName('preset-fault').presetDismissOk,
       collapsedSummary: {
         live: byName('live').reviewSummaryText,
         ended: byName('ended').reviewSummaryText,
         singleRound: byName('partial').singleRoundText,
+        rootTexts: byName('live').collapsedTexts.filter(function (x) { return x.role === 'cto-office' || x.role === 'unknown' }),
         ok: byName('live').roundPrefixOk && byName('ended').roundPrefixOk && byName('partial').singleRoundOk
+      },
+      rootCardText: {
+        live: byName('live').rootLastText,
+        windowPartial: byName('window-partial').rootLastText,
+        privacy: byName('privacy').rootLastText
+      },
+      opinions: {
+        chip: byName('review-opinions').opinionChip,
+        opened: byName('review-opinions').chipOpened,
+        order: byName('review-opinions').opinionOrder,
+        orderOk: byName('review-opinions').opinionOrderOk,
+        rawHidden: byName('review-opinions').rawHiddenByDefault,
+        afterRaw: byName('review-opinions').afterRaw,
+        longText: byName('review-opinions').longText,
+        rowCollapse: byName('review-opinions').rowCollapse,
+        rowExpand: byName('review-opinions').rowExpand,
+        rowExpandOk: byName('review-opinions').rowExpandOk,
+        receiptJump: byName('review-opinions').receiptJump,
+        receiptJumpOk: byName('review-opinions').receiptJumpOk,
+        rowBtnWidths: byName('review-opinions').rowBtnWidths,
+        rowBtnOk: byName('review-opinions').rowBtnOk,
+        chipsAtWidths: byName('review-opinions').widths.map(function (w) { return { width: w.width, chips: w.chips, fits: w.fits } }),
+        ok: byName('review-opinions').opinionsOk
+      },
+      confirm: {
+        answered: byName('confirm').confirmAnswered,
+        pending: byName('confirm').confirmPending,
+        late: byName('confirm').confirmLate,
+        malformed: byName('confirm').confirmMalformed,
+        malformedOk: byName('confirm').confirmMalformedOk,
+        ok: byName('confirm').confirmOk
+      },
+      chipForms: byName('live').chipForms,
+      chipFormsOk: byName('live').chipFormsOk && byName('review-opinions').chipFormsOk,
+      chipFormsBad: byName('live').chipFormsBad,
+      presetDismissPrecondition: byName('preset-fault').presetDismissPrecondition,
+      dismiss: {
+        before: byName('dismiss').dismissBefore,
+        window: byName('dismiss').dismissWindow,
+        confirm: byName('dismiss').dismissConfirm,
+        afterRemount: byName('dismiss').dismissAfterRemount,
+        newCall: byName('dismiss').dismissNewCall,
+        ok: byName('dismiss').dismissOk
       },
       emptyWindowSummary: byName('empty-window').emptyWindowSummary,
       emptyWindowChips: byName('empty-window').emptyWindowChips,
