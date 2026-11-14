@@ -18,11 +18,14 @@ description: CTO 办公室评审规程。只读审 diff 与契约一致性，跑
 
 只给 `PASS` 或 `CHANGES`，不许"基本通过"。
 
+回执**最后一行**必须是机器可读的 `GATE: PASS` 或 `GATE: CHANGES`（可在冒号后带一句后缀，如 `GATE: PASS 单闸`）。办公室信息流面板只认这一行，不要用自然语言代替，也不要在别处写 `GATE:`。
+
 ```
 CHANGES
 1. [P1] packages/foo/src/bar.ts:42 — 空数组会抛异常（复现：…）。建议：…
 2. [P2] ...
 证据：`pnpm test foo` → …
+GATE: <PASS|CHANGES>
 ```
 
 严重度：P0 会坏或会丢数据、P1 明显缺陷、P2 可维护性、P3 风格。

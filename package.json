@@ -5,6 +5,10 @@
   "type": "module",
   "license": "MIT",
   "exports": {
+    ".": {
+      "import": "./index.js"
+    },
+    "./client": "./client.js",
     "./cordis.patch.yml": "./cordis.patch.yml",
     "./skills/*": "./skills/*",
     "./package.json": "./package.json"
@@ -14,6 +18,8 @@
     "skills",
     "scripts",
     "docs",
+    "index.js",
+    "client.js",
     "README.md"
   ],
   "engines": {
@@ -33,10 +39,15 @@
       "profiles": [
         "web"
       ]
+    },
+    "client": {
+      "platform": "web",
+      "inject": []
     }
   },
   "scripts": {
     "sync": "node scripts/sync-office-data.mjs",
     "check": "node scripts/sync-office-data.mjs --check"
-  }
+  },
+  "main": "./index.js"
 }

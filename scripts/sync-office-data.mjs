@@ -11,17 +11,31 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const BUNDLE = '@chy/dsh-cto-office@0.1.0';
-const SCHEMA = 'cto-office/office-data@1';
+const SCHEMA = 'cto-office/office-data@2';
 const SCRIPT_ID = 'sync-office-data@2';
 
 const DEFAULTS = {
   patch: 'cordis.patch.yml',
   html: 'docs/architecture.html',
-  json: 'docs/office.json'
+  json: 'docs/office.json',
+  client: 'client.js',
+  skill: 'skills/cto-office/SKILL.md'
 };
 
 const START = '<!-- office-data:start -->';
 const END = '<!-- office-data:end -->';
+const CLIENT_START = '/* office-facts:start */';
+const CLIENT_END = '/* office-facts:end */';
+
+// 「## 二、开工六步」里的六个步骤；id 是面板的稳定键，label 从章程解析。
+const STEP_IDS = {
+  '澄清': 'clarify',
+  '开卡': 'open-card',
+  '派工': 'dispatch',
+  '跟进': 'follow',
+  '闸门': 'gate',
+  '结算': 'settle'
+};
 
 // 口径不可回潮：页面不得再出现串行双闸的旧说法。
 // 字面量用转义写，避免扫描器自身被仓库全文自检命中。
@@ -43,6 +57,10 @@ const ALLOWLIST = new Set([
 
 const TOOL_KEYS = ['read', 'write', 'edit', 'applyPatch', 'bash', 'pwsh', 'search', 'jobs',
   'todo', 'web', 'askUser', 'present', 'goal', 'office', 'subagent', 'skill', 'fsSearch'];
+
+// 闸门语义属于业务事实：只有这两个角色交回 GATE: 行，面板才给它们画闸门 chip。
+// 浏览器半只读 facts（OFFICE_FACTS.gateRoles），不许再写死 preset id。
+const GATE_ROLES = ['cto-reviewer', 'cto-qa'];
 
 // 页面 copy.meta.toolSemantics 只列这 14 项；web / skill / fsSearch 有行号但不在页面语义里。
 const SEMANTIC_KEYS = TOOL_KEYS.filter((key) => !['web', 'skill', 'fsSearch'].includes(key));
@@ -89,7 +107,7 @@ function fail(code, message) {
 
 function parseArgs(argv) {
   const opts = { check: false, stdout: false, quiet: false, patch: DEFAULTS.patch,
-    html: DEFAULTS.html, json: DEFAULTS.json };
+    html: DEFAULTS.html, json: DEFAULTS.json, client: DEFAULTS.client, skill: DEFAULTS.skill };
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
     if (arg === '--check') opts.check = true;
@@ -273,7 +291,38 @@ function assertFixture(presets, lineCount) {
   if (!lineCount) fail('FIXTURE', 'patch 为空');
 }
 
-function buildFacts(patchText, opts) {
+function parseSteps(skillText) {
+  const lines = skillText.split('\n');
+  const headingAt = lines.findIndex((line) => /^##\s*二、开工六步/.test(line));
+  if (headingAt < 0) fail('STEPS', 'SKILL.md 找不到「## 二、开工六步」');
+  const steps = [];
+  for (let i = headingAt + 1; i < lines.length; i += 1) {
+    const line = lines[i];
+    if (/^##\s/.test(line)) break;
+    const m = /^(\d+)\.\s+\*\*(.+?)\*\*/.exec(line);
+    if (!m) continue;
+    const label = m[2].trim();
+    const id = STEP_IDS[label];
+    if (!id) fail('STEPS', 'SKILL.md 第 ' + m[1] + ' 步「' + label + '」不是六步之一');
+    steps.push({ id, label });
+  }
+  if (steps.length !== 6) fail('STEPS', 'SKILL.md 六步解析到 ' + steps.length + ' 个（需 6）');
+  return steps;
+}
+
+function parseTheme(htmlText) {
+  const read = (name) => {
+    const m = new RegExp('--' + name + ':\\s*(#[0-9a-fA-F]{3,8})').exec(htmlText);
+    return m ? m[1].toLowerCase() : '';
+  };
+  const theme = { accent: read('accent'), ok: read('ok'), warn: read('warn'), bad: read('bad') || '#ff8f8f' };
+  for (const key of ['accent', 'ok', 'warn']) {
+    if (!theme[key]) fail('THEME', 'architecture.html 色板缺少 --' + key);
+  }
+  return theme;
+}
+
+function buildFacts(patchText, opts, sources) {
   const sha256 = crypto.createHash('sha256').update(patchText).digest('hex');
   const { lines, presets } = parsePatch(patchText);
   assertFixture(presets, lines.length - 1);
@@ -332,6 +381,9 @@ function buildFacts(patchText, opts) {
   }
   workflowLines.sort((a, b) => a - b);
 
+  const steps = parseSteps(sources.skillText);
+  const theme = parseTheme(sources.htmlText);
+
   const outPresets = presets.map((p) => {
     const tools = {};
     for (const key of TOOL_KEYS) tools[key] = p.tools[key];
@@ -375,6 +427,8 @@ function buildFacts(patchText, opts) {
       dispatchEdges: allowed.length,
       allowedPresets: allowed.length
     },
+    steps,
+    theme,
     presets: outPresets,
     lineHints: {
       tools: hintTools,
@@ -419,6 +473,41 @@ function injectHtml(htmlText, json) {
   const body = htmlScriptBody(json).replace(/\n$/, '');
   const next = lines.slice(0, starts + 1).concat(body.split('\n'), lines.slice(ends));
   return next.join('\n');
+}
+
+function clientFactsOf(facts) {
+  const root = facts.presets.find((preset) => preset.isRoot);
+  return {
+    schema: facts.schema,
+    theme: facts.theme,
+    steps: facts.steps,
+    // 谁是根预设、哪几个角色出闸门，由生成器算一次；渲染层只查表。
+    rootPreset: root ? root.id : '',
+    gateRoles: GATE_ROLES.filter((id) => facts.presets.some((preset) => preset.id === id)),
+    presets: facts.presets.map((preset) => ({
+      id: preset.id,
+      name: preset.name,
+      role: preset.isRoot ? 'CTO' : preset.name.replace(/^CTO 办公室 · /, ''),
+      order: preset.order,
+      ...(preset.isRoot ? { isRoot: true } : {}),
+      ...(preset.canDispatch ? { canDispatch: true } : {}),
+      tools: preset.tools
+    }))
+  };
+}
+
+function clientBlock(facts) {
+  return CLIENT_START + '\nvar OFFICE_FACTS = ' + JSON.stringify(clientFactsOf(facts), null, 2) + ';\n' + CLIENT_END;
+}
+
+function injectClient(clientText, facts) {
+  const starts = clientText.split('\n').filter((line) => line === CLIENT_START).length;
+  const ends = clientText.split('\n').filter((line) => line === CLIENT_END).length;
+  if (starts !== 1 || ends !== 1) fail('MARKERS', 'client.js office-facts 标记 start=' + starts + ' end=' + ends + '（各需 1）');
+  const at = clientText.indexOf(CLIENT_START);
+  const to = clientText.indexOf(CLIENT_END);
+  if (at < 0 || to < at) fail('MARKERS', 'client.js office-facts 标记顺序不对');
+  return clientText.slice(0, at) + clientBlock(facts) + clientText.slice(to + CLIENT_END.length);
 }
 
 function readInput(file) {
@@ -584,13 +673,29 @@ function checkMode(opts, facts, json) {
       }
     }
   }
+  const clientRel = path.relative(ROOT, opts.client) || opts.client;
+  if (!fs.existsSync(opts.client)) {
+    process.stdout.write(clientRel + ': 文件不存在\n');
+    dirty = true;
+  } else {
+    const clientText = fs.readFileSync(opts.client, 'utf8');
+    const expected = injectClient(clientText, facts);
+    if (clientText !== expected) {
+      const at = firstDiffIndex(clientText, expected);
+      const line = clientText.slice(0, at).split('\n').length;
+      process.stdout.write(clientRel + ': office-facts 块与 patch 生成的 facts 不一致（首个差异 行 ' + line + '，偏移 ' + at + '）\n');
+      dirty = true;
+    }
+  }
   process.exit(dirty ? 1 : 0);
 }
 
 function main() {
   const opts = parseArgs(process.argv.slice(2));
   const patchText = readInput(opts.patch);
-  const facts = buildFacts(patchText, opts);
+  const skillText = readInput(opts.skill);
+  const htmlText = readInput(opts.html);
+  const facts = buildFacts(patchText, opts, { skillText, htmlText });
   const json = stableJson(facts);
   if (opts.stdout) {
     process.stdout.write(json);
@@ -600,20 +705,25 @@ function main() {
     checkMode(opts, facts, json);
     return;
   }
-  const htmlText = readInput(opts.html);
   const nextHtml = injectHtml(htmlText, json);
   markersIn(nextHtml);
+  const clientText = readInput(opts.client);
+  const nextClient = injectClient(clientText, facts);
   let tmpJson = null;
   let tmpHtml = null;
+  let tmpClient = null;
   let wroteJson = false;
   let wroteHtml = false;
+  let wroteClient = false;
   try {
     tmpJson = stageFile(opts.json, json);
     tmpHtml = stageFile(opts.html, nextHtml);
+    tmpClient = stageFile(opts.client, nextClient);
     if (tmpJson) { fs.renameSync(tmpJson, opts.json); tmpJson = null; wroteJson = true; }
     if (tmpHtml) { fs.renameSync(tmpHtml, opts.html); tmpHtml = null; wroteHtml = true; }
+    if (tmpClient) { fs.renameSync(tmpClient, opts.client); tmpClient = null; wroteClient = true; }
   } finally {
-    for (const tmp of [tmpJson, tmpHtml]) {
+    for (const tmp of [tmpJson, tmpHtml, tmpClient]) {
       if (tmp) { try { fs.unlinkSync(tmp); } catch { /* renamed or gone */ } }
     }
   }
@@ -621,6 +731,7 @@ function main() {
     process.stdout.write('patch sha256=' + facts.provenance.sha256 + ' lines=' + facts.provenance.lines + '\n');
     process.stdout.write((wroteJson ? 'wrote ' : 'unchanged ') + path.relative(ROOT, opts.json) + '\n');
     process.stdout.write((wroteHtml ? 'wrote ' : 'unchanged ') + path.relative(ROOT, opts.html) + '\n');
+    process.stdout.write((wroteClient ? 'wrote ' : 'unchanged ') + path.relative(ROOT, opts.client) + '\n');
   }
 }
 

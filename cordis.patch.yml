@@ -642,3 +642,12 @@
                   thresholdChars: 8192
                   headChars: 4096
                   tailChars: 1024
+
+# 办公室信息流（浏览器右栏面板）的 Host 入口。
+# 浏览器半由 package.json 的 `dsh.client` 声明、`exports["./client"]` 以 classic
+# script 加载；这一行只让补丁树里存在一个可解析的包入口。防重复 guard 与
+# dsh-better-sidebar 同款：聚合 bundle 若已用别的 id 挂了本包，这一行退让。
+- insert:
+    - id: cto-office-live
+      name: '@chy/dsh-cto-office'
+      disabled: !!js "[...ctx.loader.entries()].some((e) => e.options.name === '@chy/dsh-cto-office' && e.options.id !== 'cto-office-live' && !e.disabled)"

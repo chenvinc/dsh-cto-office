@@ -1,0 +1,1300 @@
+/* CTO 办公室 · 办公室信息流（浏览器半）
+ *
+ * 这是 package.json `dsh.client` 声明的 classic script：不能出现 import/export，
+ * 只能 require() 宿主白名单里的模块。右栏面板读的是已有的 session 事件通道
+ * （ctx.sessions.retain → binding.eventSource）与 subagentCatalog 投影，
+ * 不新建 HTTP / SSE / Host 路由。
+ *
+ * retain 的 source 名登记为 `cto-office/liveboard`。它不在
+ * `SessionReferenceSourceMap`（packages/api/session-controller/src/client/index.ts 的声明合并）
+ * 里，宿主运行期不校验，只用于诊断与归属；宿主开始校验时，需在那个声明合并里补上
+ * 这一条（`interface SessionReferenceSourceMap { 'cto-office/liveboard': true }`）。
+ *
+ * `OFFICE_FACTS` 由 scripts/sync-office-data.mjs 注入，禁止手写。
+ */
+/* office-facts:start */
+var OFFICE_FACTS = {
+  "schema": "cto-office/office-data@2",
+  "theme": {
+    "accent": "#5ac8fa",
+    "ok": "#7fe0a8",
+    "warn": "#f2c66d",
+    "bad": "#ff8f8f"
+  },
+  "steps": [
+    {
+      "id": "clarify",
+      "label": "澄清"
+    },
+    {
+      "id": "open-card",
+      "label": "开卡"
+    },
+    {
+      "id": "dispatch",
+      "label": "派工"
+    },
+    {
+      "id": "follow",
+      "label": "跟进"
+    },
+    {
+      "id": "gate",
+      "label": "闸门"
+    },
+    {
+      "id": "settle",
+      "label": "结算"
+    }
+  ],
+  "rootPreset": "cto-office",
+  "gateRoles": [
+    "cto-reviewer",
+    "cto-qa"
+  ],
+  "presets": [
+    {
+      "id": "cto-office",
+      "name": "CTO 办公室",
+      "role": "CTO",
+      "order": 20,
+      "isRoot": true,
+      "canDispatch": true,
+      "tools": {
+        "read": true,
+        "write": true,
+        "edit": true,
+        "applyPatch": false,
+        "bash": true,
+        "pwsh": true,
+        "search": true,
+        "jobs": true,
+        "todo": true,
+        "web": true,
+        "askUser": true,
+        "present": true,
+        "goal": true,
+        "office": true,
+        "subagent": true,
+        "skill": true,
+        "fsSearch": true
+      }
+    },
+    {
+      "id": "cto-architect",
+      "name": "CTO 办公室 · 架构师",
+      "role": "架构师",
+      "order": 21,
+      "tools": {
+        "read": true,
+        "write": false,
+        "edit": false,
+        "applyPatch": false,
+        "bash": true,
+        "pwsh": true,
+        "search": true,
+        "jobs": false,
+        "todo": true,
+        "web": true,
+        "askUser": false,
+        "present": false,
+        "goal": false,
+        "office": false,
+        "subagent": false,
+        "skill": true,
+        "fsSearch": true
+      }
+    },
+    {
+      "id": "cto-builder",
+      "name": "CTO 办公室 · 工程师",
+      "role": "工程师",
+      "order": 22,
+      "tools": {
+        "read": true,
+        "write": true,
+        "edit": true,
+        "applyPatch": false,
+        "bash": true,
+        "pwsh": true,
+        "search": true,
+        "jobs": true,
+        "todo": true,
+        "web": false,
+        "askUser": false,
+        "present": false,
+        "goal": false,
+        "office": false,
+        "subagent": false,
+        "skill": true,
+        "fsSearch": true
+      }
+    },
+    {
+      "id": "cto-reviewer",
+      "name": "CTO 办公室 · 评审",
+      "role": "评审",
+      "order": 23,
+      "tools": {
+        "read": true,
+        "write": false,
+        "edit": false,
+        "applyPatch": false,
+        "bash": true,
+        "pwsh": true,
+        "search": true,
+        "jobs": false,
+        "todo": true,
+        "web": false,
+        "askUser": false,
+        "present": false,
+        "goal": false,
+        "office": false,
+        "subagent": false,
+        "skill": true,
+        "fsSearch": true
+      }
+    },
+    {
+      "id": "cto-qa",
+      "name": "CTO 办公室 · QA",
+      "role": "QA",
+      "order": 24,
+      "tools": {
+        "read": true,
+        "write": false,
+        "edit": false,
+        "applyPatch": false,
+        "bash": true,
+        "pwsh": true,
+        "search": true,
+        "jobs": false,
+        "todo": true,
+        "web": false,
+        "askUser": false,
+        "present": false,
+        "goal": false,
+        "office": false,
+        "subagent": false,
+        "skill": true,
+        "fsSearch": true
+      }
+    },
+    {
+      "id": "cto-ux",
+      "name": "CTO 办公室 · UI/UX 设计",
+      "role": "UI/UX 设计",
+      "order": 25,
+      "tools": {
+        "read": true,
+        "write": false,
+        "edit": false,
+        "applyPatch": false,
+        "bash": true,
+        "pwsh": true,
+        "search": true,
+        "jobs": false,
+        "todo": true,
+        "web": true,
+        "askUser": false,
+        "present": false,
+        "goal": false,
+        "office": false,
+        "subagent": false,
+        "skill": true,
+        "fsSearch": true
+      }
+    },
+    {
+      "id": "cto-product",
+      "name": "CTO 办公室 · 业务",
+      "role": "业务",
+      "order": 26,
+      "tools": {
+        "read": true,
+        "write": false,
+        "edit": false,
+        "applyPatch": false,
+        "bash": true,
+        "pwsh": true,
+        "search": true,
+        "jobs": false,
+        "todo": true,
+        "web": true,
+        "askUser": false,
+        "present": false,
+        "goal": false,
+        "office": false,
+        "subagent": false,
+        "skill": true,
+        "fsSearch": true
+      }
+    }
+  ]
+};
+/* office-facts:end */
+
+;(function () {
+  'use strict'
+
+  var KIND = 'cto-office.role-feed'
+  var TAB_ID = '@chy/dsh-cto-office:role-feed'
+  var DISMISS_KEY = 'cto-office.role-feed.dismissed'
+  var NOOP = function () {}
+  var EMPTY_SNAP = { entries: [], hasMore: false, revision: 0 }
+
+  function str(v) {
+    return typeof v === 'string' ? v : ''
+  }
+
+  /* 凭据先替换再截断：截断会把密钥切掉一半但仍留在 DOM 里，所以顺序不能反。 */
+  var SECRET_RULES = [
+    /sk-[A-Za-z0-9_-]{8,}/g,
+    /Bearer\s+[A-Za-z0-9._~+/=-]{8,}/g,
+    /ghp_[A-Za-z0-9]{20,}/g,
+    /github_pat_[A-Za-z0-9_]{20,}/g,
+    /AKIA[0-9A-Z]{16}/g,
+    /(api[_-]?key|token|secret|password)\s*[:=]\s*\S+/gi
+  ]
+
+  function sanitize(text) {
+    var s = String(text == null ? '' : text)
+    for (var i = 0; i < SECRET_RULES.length; i += 1) s = s.replace(SECRET_RULES[i], '‹已隐藏›')
+    return s
+  }
+
+  function clip(text, max) {
+    var s = sanitize(text).replace(/\s+/g, ' ').trim()
+    return s.length > max ? s.slice(0, max - 1) + '…' : s
+  }
+
+  function formatDuration(ms) {
+    /* NaN / Infinity 都是「算不出来」，不是「0 秒」：返回空串，由渲染处落 — */
+    if (!ms || !isFinite(ms)) return ''
+    var s = Math.round(ms / 1000)
+    if (s < 60) return s + 's'
+    var m = Math.floor(s / 60)
+    return m + 'm' + String(s % 60).padStart(2, '0') + 's'
+  }
+
+  function textOf(value) {
+    var out = []
+    var seen = 0
+    function walk(v, depth) {
+      if (v == null || seen > 2400) return
+      if (typeof v === 'string') { out.push(v); seen += v.length; return }
+      if (typeof v !== 'object' || depth > 5) return
+      if (Array.isArray(v)) { for (var i = 0; i < v.length; i += 1) walk(v[i], depth + 1); return }
+      if (typeof v.text === 'string') { out.push(v.text); seen += v.text.length }
+      if (typeof v.content === 'string') { out.push(v.content); seen += v.content.length }
+      else if (v.content) walk(v.content, depth + 1)
+      if (v.message) walk(v.message, depth + 1)
+    }
+    walk(value, 0)
+    return out.join(' ')
+  }
+
+  function argHint(raw) {
+    if (typeof raw !== 'string' || raw === '') return ''
+    var parsed = null
+    try { parsed = JSON.parse(raw) } catch (error) { return clip(raw, 80) }
+    if (parsed == null || typeof parsed !== 'object') return clip(String(parsed), 80)
+    var keys = ['description', 'prompt', 'command', 'cmd', 'path', 'pattern', 'query', 'title']
+    for (var i = 0; i < keys.length; i += 1) {
+      if (typeof parsed[keys[i]] === 'string' && parsed[keys[i]] !== '') return clip(parsed[keys[i]], 80)
+    }
+    return ''
+  }
+
+  function gateOfText(text) {
+    var lines = String(text || '').split(/\r?\n/).map(function (line) { return line.trim() }).filter(Boolean)
+    if (!lines.length) return ''
+    var m = /^GATE:\s*(PASS|CHANGES|FAIL)\b/.exec(lines[lines.length - 1])
+    return m ? m[1] : ''
+  }
+
+  function eventGate(event) {
+    if (event.type !== 'assistant/message' && event.type !== 'tool/result') return ''
+    return gateOfText(textOf(event.data))
+  }
+
+  function catalogOf(value) {
+    if (Array.isArray(value)) return value
+    if (value && Array.isArray(value.entries)) return value.entries
+    return []
+  }
+
+  function readPresetFromList(ctx, id) {
+    try {
+      var snap = ctx.sessions.list.getSnapshot()
+      var row = snap.byId[id]
+      var values = row && row.projectionValues
+      var preset = values && values.agentPreset
+      return typeof preset === 'string' && preset !== '' ? preset : ''
+    } catch (error) { return '' }
+  }
+
+  var presetCache = new Map()
+  var retainActive = 0
+  var retainWaiting = []
+  var RETAIN_LIMIT = 8
+
+  function pumpRetain() {
+    while (retainActive < RETAIN_LIMIT && retainWaiting.length) {
+      var job = retainWaiting.shift()
+      retainActive += 1
+      Promise.resolve().then(job.task).then(function (value) {
+        retainActive -= 1
+        job.resolve(value)
+        pumpRetain()
+      }, function (error) {
+        retainActive -= 1
+        job.reject(error)
+        pumpRetain()
+      })
+    }
+  }
+
+  function scheduleRetain(task) {
+    return new Promise(function (resolve, reject) {
+      retainWaiting.push({ task: task, resolve: resolve, reject: reject })
+      pumpRetain()
+    })
+  }
+
+  /* 解析成功resolve({preset,reason:''})；失败 resolve({preset:'',reason})，由面板把
+   * 这个子会话挂到「未识别」一行，而不是从信息流里静默删掉。 */
+  function resolvePreset(ctx, child) {
+    var cached = presetCache.get(child.id)
+    if (cached) return Promise.resolve({ preset: cached, reason: '' })
+    var listed = readPresetFromList(ctx, child.id)
+    if (listed) { presetCache.set(child.id, listed); return Promise.resolve({ preset: listed, reason: '' }) }
+    return scheduleRetain(function () {
+      var target = childTarget(child, child.parentSessionId)
+      var ref = null
+      var reason = ''
+      try { ref = ctx.sessions.retain(target, { source: 'cto-office/liveboard' }) }
+      catch (error) { return { preset: '', reason: clip(error && error.message ? error.message : String(error), 80) } }
+      return Promise.resolve(ref.ready).then(function () {
+        var face = ref.binding.session.projections.faceOf('agentPreset')
+        var value = face.getSnapshot()
+        var preset = typeof value === 'string' ? value : ''
+        if (preset) presetCache.set(child.id, preset)
+        else reason = '会话没有 agentPreset 投影'
+        return { preset: preset, reason: preset ? '' : reason }
+      }).catch(function (error) {
+        return { preset: '', reason: clip(error && error.message ? error.message : String(error), 80) || '读取 agentPreset 失败' }
+      }).then(function (result) {
+        try { ref.release() } catch (error) { /* already gone */ }
+        return result
+      })
+    })
+  }
+
+  function childTarget(child, parentSessionId) {
+    return child.mode === 'one-shot' || child.mode === 'continuable' || child.mode === 'unknown'
+      ? { parentSessionId: parentSessionId, childSessionId: child.id, mode: child.mode }
+      : child.id
+  }
+
+  function statusOfRole(role, children, feeds, rootRunning, rootEvents, needsConfirm) {
+    if (role.isRoot) {
+      if (needsConfirm) return 'blocked'
+      if (rootRunning) return 'running'
+      return rootEvents.length ? 'returned' : 'idle'
+    }
+    if (!children.length) return 'idle'
+    var anyFail = false
+    var anyGate = false
+    for (var i = 0; i < feeds.length; i += 1) {
+      var g = feeds[i] && feeds[i].gate
+      if (g === 'FAIL') anyFail = true
+      else if (g) anyGate = true
+    }
+    if (anyFail) return 'blocked'
+    if (anyGate) return 'returned'
+    if (rootRunning) return 'running'
+    return 'returned'
+  }
+
+  function roleGateOf(feeds) {
+    var best = ''
+    var rank = { FAIL: 3, CHANGES: 2, PASS: 1 }
+    for (var i = 0; i < feeds.length; i += 1) {
+      var g = feeds[i] && feeds[i].gate
+      if (g && (rank[g] || 0) > (rank[best] || 0)) best = g
+    }
+    return best
+  }
+
+  function turnElapsed(events) {
+    var ui = -1
+    for (var i = 0; i < events.length; i += 1) if (events[i].type === 'user/message') ui = i
+    if (ui < 0) return ''
+    for (var j = events.length - 1; j > ui; j -= 1) {
+      if (events[j].type === 'assistant/message') {
+        var start = events[ui].time || 0
+        var end = events[j].time || start
+        return formatDuration(Math.max(0, end - start))
+      }
+    }
+    return ''
+  }
+
+  function gateChip(status) {
+    if (status === 'PASS') return { text: 'PASS', symbol: '✓', cls: 'ok' }
+    if (status === 'CHANGES') return { text: 'CHANGES', symbol: '!', cls: 'warn' }
+    if (status === 'FAIL') return { text: 'FAIL', symbol: '✕', cls: 'bad' }
+    return { text: '待判定', symbol: '·', cls: 'idle' }
+  }
+
+  var CSS = [
+    '.co-panel{container-type:inline-size;display:flex;flex-direction:column;height:100%;min-height:0;background:var(--co-bg,#0a0d11);color:var(--co-text,#e8eef4);font:13px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;--co-bg:#0a0d11;--co-panel:#11171e;--co-panel-2:#0c1218;--co-line:#232c37;--co-line-2:#33404e;--co-text:#e8eef4;--co-muted:#94a3b2;--co-dim:#6f8090;--co-accent:#5ac8fa;--co-ok:#7fe0a8;--co-warn:#f2c66d;--co-bad:#ff8f8f;--co-mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono","Courier New",monospace}',
+    '.co-panel *{box-sizing:border-box;min-width:0}',
+    '.co-shell{display:flex;flex-direction:column;min-height:0;height:100%;overflow:hidden}',
+    '.co-head{flex:none;padding:10px 12px 8px;border-bottom:1px solid var(--co-line);background:linear-gradient(180deg,#121a22,#0c1218)}',
+    '.co-title{display:flex;align-items:center;gap:8px;justify-content:space-between}',
+    '.co-title h2{margin:0;font-size:13.5px;letter-spacing:.01em}',
+    '.co-title .co-badge{font:10.5px var(--co-mono);color:var(--co-muted);border:1px solid var(--co-line-2);border-radius:999px;padding:1px 7px;white-space:nowrap}',
+    '.co-sum{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 6px;margin-top:6px;font-size:11px;color:var(--co-muted)}',
+    '.co-sep{color:var(--co-muted);font-weight:700;opacity:1;margin:0 -1px}',
+    '.co-pending{color:var(--co-muted)}',
+    '.co-sum b{color:var(--co-text);font-weight:600;font-family:var(--co-mono);font-size:11px}',
+    '.co-steps{flex:none;display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:4px;padding:8px 12px;border-bottom:1px solid var(--co-line)}',
+    '.co-step{appearance:none;border:1px solid var(--co-line);background:var(--co-panel-2);color:var(--co-muted);border-radius:6px;padding:5px 3px;font:11px/1.2 inherit;cursor:pointer;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
+    '.co-step[aria-current="step"]{border-color:var(--co-accent);color:var(--co-text);background:color-mix(in srgb,var(--co-accent) 10%,transparent)}',
+    '.co-step .co-infer{display:block;font:9px var(--co-mono);color:var(--co-dim);margin-top:2px}',
+    '.co-strip{flex:none;display:none;margin:8px 12px 0;padding:7px 9px;border:1px solid var(--co-line-2);border-radius:6px;font-size:11.5px;color:var(--co-muted);background:var(--co-panel-2)}',
+    '.co-strip[data-show="true"]{display:block}',
+    '.co-strip[data-tone="warn"]{border-color:color-mix(in srgb,var(--co-warn) 45%,transparent);color:var(--co-warn)}',
+    '.co-strip[data-tone="bad"]{border-color:color-mix(in srgb,var(--co-bad) 45%,transparent);color:var(--co-bad)}',
+    '.co-strip-action{appearance:none;width:calc(100% - 24px);text-align:left;font:11.5px/1.5 inherit;cursor:pointer}',
+    '.co-strip-action:hover{border-color:var(--co-bad);text-decoration:underline}',
+    '.co-strip-action:focus-visible{outline:2px solid var(--co-bad);outline-offset:1px}',
+    '.co-list{flex:1 1 auto;min-height:0;overflow:auto;padding:8px 10px 10px;display:flex;flex-direction:column;gap:7px;scrollbar-gutter:stable}',
+    '.co-card{border:1px solid var(--co-line);border-radius:8px;background:var(--co-panel);overflow:hidden}',
+    '.co-card[data-status="running"]{border-color:var(--co-line-2)}',
+    '.co-card[data-status="blocked"]{border-color:color-mix(in srgb,var(--co-bad) 45%,transparent)}',
+    '.co-card[data-status="returned"]{border-color:color-mix(in srgb,var(--co-ok) 30%,transparent)}',
+    '.co-card-head{display:flex;align-items:center;gap:7px;width:100%;padding:7px 9px;background:transparent;border:0;color:inherit;font:inherit;text-align:left;cursor:pointer}',
+    '.co-dot{width:7px;height:7px;border-radius:50%;background:var(--co-dim);flex:none}',
+    '.co-card[data-status="running"] .co-dot{background:var(--co-accent)}',
+    '.co-card[data-status="returned"] .co-dot{background:var(--co-ok)}',
+    '.co-card[data-status="blocked"] .co-dot{background:var(--co-bad)}',
+    '.co-card[data-status="idle"] .co-dot{background:var(--co-dim)}',
+    '.co-role{font-weight:600;font-size:12.5px;white-space:nowrap}',
+    '.co-preset{font:10px var(--co-mono);color:var(--co-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
+    '.co-card-head .co-spacer{flex:1 1 auto}',
+    '.co-gate{display:inline-flex;align-items:center;gap:3px;font:10px var(--co-mono);border:1px solid var(--co-line-2);border-radius:999px;padding:1px 6px;color:var(--co-muted);white-space:nowrap}',
+    '.co-gate[data-gate="PASS"]{color:var(--co-ok);border-color:color-mix(in srgb,var(--co-ok) 50%,transparent)}',
+    '.co-gate[data-gate="CHANGES"]{color:var(--co-warn);border-color:rgba(242,198,109,.5)}',
+    '.co-gate[data-gate="FAIL"]{color:var(--co-bad);border-color:color-mix(in srgb,var(--co-bad) 50%,transparent)}',
+    '.co-gate .co-sym{font-weight:700}',
+    '.co-last{padding:0 9px 7px 24px;font-size:11px;color:var(--co-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
+    '.co-body{border-top:1px solid var(--co-line);padding:6px 9px 8px;background:var(--co-panel-2)}',
+    '.co-run + .co-run{border-top:1px dashed var(--co-line-2);margin-top:6px;padding-top:6px}',
+    '.co-run-h{font:10.5px var(--co-mono);color:var(--co-muted);margin:0 0 4px}',
+    '.co-ev{list-style:none;display:flex;gap:6px;padding:3px 0;font-size:11px;color:var(--co-muted);align-items:baseline}',
+    '.co-ev code{font:10px var(--co-mono);color:var(--co-dim);flex:none}',
+    '.co-ev[data-kind="tool-call"] .co-ev-t{color:var(--co-accent)}',
+    '.co-ev[data-kind="tool-result"] .co-ev-t{color:var(--co-text)}',
+    '.co-ev[data-kind="user"] .co-ev-t{color:var(--co-text)}',
+    '.co-ev-t{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}',
+    '.co-new{width:5px;height:5px;border-radius:50%;background:var(--co-accent);flex:none}',
+    '.co-ops{list-style:none;margin:0;padding:0;max-height:240px;overflow:auto}',
+    '.co-empty{padding:18px 8px;text-align:center;color:var(--co-dim);font-size:12px}',
+    '.co-foot{flex:none;border-top:1px solid var(--co-line);padding:6px 10px;display:flex;justify-content:center;background:var(--co-panel-2)}',
+    '.co-return{display:none;appearance:none;border:1px solid var(--co-accent);background:color-mix(in srgb,var(--co-accent) 12%,transparent);color:var(--co-accent);border-radius:999px;padding:4px 12px;font:11.5px inherit;cursor:pointer}',
+    '.co-return[data-show="true"]{display:inline-flex;gap:5px;align-items:center}',
+    '.co-sr{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}',
+    '.co-card[data-expanded="true"] .co-card-head{background:#131c25}',
+    '.co-more{margin:4px 0;padding:5px 7px;border:1px dashed var(--co-line-2);border-radius:6px;color:var(--co-warn);font-size:10.5px}',
+    '.co-fallback{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;gap:10px;justify-content:center;padding:16px 14px}',
+    '.co-fallback-msg{margin:0;font:11.5px/1.5 var(--co-mono);color:var(--co-muted);overflow-wrap:anywhere;max-height:7.5em;overflow:auto}',
+    '.co-retry{align-self:flex-start;appearance:none;border:1px solid var(--co-accent);background:color-mix(in srgb,var(--co-accent) 12%,transparent);color:var(--co-accent);border-radius:999px;padding:4px 14px;font:11.5px inherit;cursor:pointer}',
+    '.co-retry:focus-visible{outline:2px solid var(--co-accent);outline-offset:2px}',
+    '@media (prefers-reduced-motion:no-preference){.co-dot{transition:background-color .18s ease}.co-card[data-status="running"] .co-dot{animation:co-breathe 2.4s ease-in-out infinite}.co-card[data-status="blocked"]{animation:co-blocked .8s ease-out 1}@keyframes co-breathe{0%,100%{opacity:1}50%{opacity:.45}}@keyframes co-blocked{0%{box-shadow:0 0 0 3px color-mix(in srgb,var(--co-bad) 35%,transparent)}100%{box-shadow:none}}}',
+    '@media (prefers-reduced-motion:reduce){.co-panel *{animation:none!important;transition:none!important}}',
+    '@container (max-width:359px){.co-head{padding:8px}.co-steps{gap:2px;padding:6px 8px}.co-step{font-size:10px;padding:4px 1px}.co-role{font-size:12px}.co-preset{display:none}.co-last{padding-left:10px}}',
+    '@container (min-width:560px){.co-head{padding:12px 14px 9px}.co-list{padding:10px 12px}.co-title h2{font-size:14px}.co-role{font-size:13px}}',
+    '@media (max-width:359px){.co-preset{display:none}}'
+  ].join('\n')
+
+  window.__ModuleLoader__.load({
+    id: '@chy/dsh-cto-office',
+    meta: function () {
+      return { stylesheets: { 'cto-office-feed.css': { text: function () { return CSS } } } }
+    },
+    factory: function (require) {
+      var React = require('react')
+      var h = React.createElement
+
+      function useSnap(store, empty) {
+        return React.useSyncExternalStore(
+          store ? function (cb) { return store.subscribe(cb) } : NOOP,
+          store ? function () { return store.getSnapshot() } : function () { return empty },
+          function () { return store ? store.getSnapshot() : empty }
+        )
+      }
+
+      /* 渲染期降级：只用于「算不出来就退回兜底值」的辅助计算（闸门、推断步、单行文案），
+       * 失败不抛出、记录首条原因给面板显示。真正的程序错误不在这里吞掉——那要留给下面的
+       * ErrorBoundary，否则会变成「静默空白」（上一次 P0 就是这样被藏起来的）。 */
+      var safeFault = ''
+
+      function safe(fn, fallback) {
+        try { return fn() } catch (error) {
+          if (!safeFault) safeFault = clip(error && error.message ? error.message : String(error), 120)
+          return fallback
+        }
+      }
+
+      /* 面板主体的最后一道防线：任何漏网的渲染期异常都换成一张兜底卡，而不是让宿主
+       * 卸载整棵右栏（P0 现象：右栏全白）。重试只重置边界自身，不重建 ctx / session。 */
+      class ErrorBoundary extends React.Component {
+        constructor(props) {
+          super(props)
+          this.state = { error: null, stack: '' }
+          this.reset = this.reset.bind(this)
+        }
+
+        static getDerivedStateFromError(error) {
+          return { error: error || new Error('render error') }
+        }
+
+        /* 只把组件栈接到兜底卡上（data-has-stack），不再打一条 console.error：
+         * React 已经为这次异常打了一条，多打一条会让「一次异常 = 一条日志」的排查口径失效。 */
+        componentDidCatch(error, info) {
+          this.setState({ stack: (info && info.componentStack) || '' })
+        }
+
+        reset() {
+          this.setState({ error: null, stack: '' })
+        }
+
+        render() {
+          var error = this.state.error
+          if (!error) return this.props.children
+          var message = clip(error && error.message ? error.message : String(error), 160) || '（无错误消息）'
+          var sessionId = this.props.sessionId || ''
+          return h('div', {
+            className: 'co-panel',
+            'data-state': 'error',
+            'data-session': sessionId,
+            'data-has-stack': this.state.stack ? 'true' : 'false',
+            role: 'alert'
+          },
+            h('div', { className: 'co-shell' },
+              h('div', { className: 'co-head' },
+                h('div', { className: 'co-title' },
+                  h('h2', null, '信息流加载失败'),
+                  h('span', { className: 'co-badge' }, 'error')
+                )
+              ),
+              h('div', { className: 'co-fallback', 'data-role': 'fallback' },
+                h('p', { className: 'co-fallback-msg' }, message),
+                h('button', { type: 'button', className: 'co-retry', onClick: this.reset }, '重试')
+              )
+            )
+          )
+        }
+      }
+
+      function roleList() {
+        var presets = (OFFICE_FACTS && OFFICE_FACTS.presets) || []
+        return presets.slice().sort(function (a, b) { return (a.order || 0) - (b.order || 0) })
+      }
+
+      function rootPreset() {
+        var list = roleList()
+        for (var i = 0; i < list.length; i += 1) if (list[i].isRoot) return list[i]
+        return list[0]
+      }
+
+      /* 业务事实（谁是根预设、哪两个角色出闸门）由 sync 写进 facts，
+       * 渲染层只查表，不写死 preset id。 */
+      function rootPresetId() {
+        var root = rootPreset()
+        return (root && root.id) || ''
+      }
+
+      function isGateRole(id) {
+        var list = (OFFICE_FACTS && OFFICE_FACTS.gateRoles) || []
+        return list.indexOf(id) >= 0
+      }
+
+      function FeedEvent(props) {
+        var e = props.event
+        var out = safe(function () { return describe(e, props.role) }, null)
+        if (!out) return null
+        return h('li', { className: 'co-ev', 'data-kind': out.kind, 'data-new': props.isNew ? 'true' : 'false' },
+          h('code', null, out.time),
+          h('span', { className: 'co-ev-t' }, out.head ? h('span', { className: 'co-ev-h' }, out.head) : null, h('span', { className: 'co-ev-b' }, out.body)),
+          props.isNew ? h('span', { className: 'co-new', 'aria-label': '新事件' }) : null
+        )
+      }
+
+      var BODY_MAX = 72
+      var LINE_MAX = 100
+
+      /* 一行事件 = 前缀(head) + 正文(body)：正文 ≤72 字，整行 ≤100 字。
+       * 前缀不计入正文预算（它本身是标签），但整行超了要硬截并带省略号。 */
+      function lineOf(head, text) {
+        var body = clip(text, BODY_MAX)
+        if (head.length + body.length > LINE_MAX) {
+          body = head.length >= LINE_MAX - 1 ? '' : body.slice(0, LINE_MAX - 1 - head.length) + '…'
+        }
+        return { head: head, body: body, text: head + body }
+      }
+
+      /* 折叠卡摘要取最近一轮；多轮时把轮次插进前缀第二段（`评审 · 第 4 轮 · …`），
+       * 单轮不带轮次号，免得每张卡都是「第 1 轮」的噪音。 */
+      function withRound(line, roundLabel) {
+        if (!line || !roundLabel || line.head.indexOf(roundLabel) >= 0) return line
+        var cut = line.head.indexOf(' · ')
+        var head = cut >= 0 ? line.head.slice(0, cut + 3) + roundLabel + ' · ' : roundLabel + ' · '
+        return lineOf(head, line.body)
+      }
+
+      function describe(e, roleName) {
+        if (!e || !e.type) return null
+        var time = formatTime(e.time)
+        var line = null
+        if (e.type === 'tool/call') {
+          var name = clip(str(e.data && e.data.name) || 'tool', 24)
+          var hint = argHint(e.data && e.data.arguments)
+          line = lineOf('工具 · ' + name + (hint ? ' · ' : ''), hint)
+        } else if (e.type === 'tool/result') {
+          line = lineOf('结果 · ', textOf(e.data) || '（无文本）')
+        } else if (e.type === 'user/message') {
+          var src = e.data && e.data.source
+          if (src && src.kind && src.kind !== 'user') return null
+          line = lineOf('用户 · ', textOf(e.data) || '（消息）')
+        } else if (e.type === 'assistant/message') {
+          line = lineOf((roleName || 'CTO') + ' · ', textOf(e.data) || '（消息）')
+        } else if (e.type === 'subagent/catalog') {
+          var d = e.data || {}
+          line = lineOf('派工 · ', str(d.label) || str(d.name) || str(d.childSessionId) || '子会话')
+        } else if (e.type === 'turn/end') {
+          line = lineOf('', '回合结束')
+        } else if (e.type === 'turn/start') {
+          line = lineOf('', '回合开始')
+        }
+        if (!line) return null
+        return { kind: e.type, time: time, head: line.head, body: line.body, text: line.text }
+      }
+
+      function formatTime(t) {
+        if (!t) return ''
+        var date = new Date(t)
+        if (isNaN(date.getTime())) return ''
+        var hh = String(date.getHours()).padStart(2, '0')
+        var mm = String(date.getMinutes()).padStart(2, '0')
+        var ss = String(date.getSeconds()).padStart(2, '0')
+        return hh + ':' + mm + ':' + ss
+      }
+
+      function EventList(props) {
+        var rows = []
+        for (var i = 0; i < props.events.length; i += 1) {
+          var e = props.events[i]
+          var time = formatTime(e.time)
+          var out = safe(function () { return describe(e, props.roleName) }, null)
+          if (!out) continue
+          rows.push(h('li', { key: String(e.seq) + '-' + i, className: 'co-ev', 'data-kind': out.kind, 'data-new': props.newAfter && e.seq > props.newAfter ? 'true' : 'false' },
+            h('code', null, time),
+            h('span', { className: 'co-ev-t' }, out.head ? h('span', { className: 'co-ev-h' }, out.head) : null, h('span', { className: 'co-ev-b' }, out.body))
+          ))
+        }
+        if (!rows.length) return h('div', { className: 'co-empty' }, '还没有可见事件。')
+        return h('ul', { className: 'co-ops' }, rows)
+      }
+
+      function gateStatusOf(events) {
+        var gate = ''
+        for (var i = 0; i < events.length; i += 1) {
+          var g = eventGate(events[i])
+          if (g) gate = g
+        }
+        return gate
+      }
+
+      function inferStep(events, gate) {
+        var dispatch = false
+        var follow = false
+        var settled = false
+        var sawUser = false
+        var sawAssistantAfterGate = false
+        for (var i = 0; i < events.length; i += 1) {
+          var e = events[i]
+          if (e.type === 'user/message') sawUser = true
+          if (e.type === 'tool/call') {
+            var n = str(e.data && e.data.name)
+            if (n === 'subagent' || n === 'subagent_fork') dispatch = true
+            if (n === 'wait_agent' || n === 'list_agents' || n === 'send_message' || n === 'job_output') follow = true
+          }
+          if (e.type === 'tool/result' && /\b(wait_agent|list_agents|send_message|job_output)\b/.test(textOf(e.data))) follow = true
+          if (eventGate(e)) gate = gate || eventGate(e)
+          if (gate && e.type === 'assistant/message') sawAssistantAfterGate = true
+          if (e.type === 'turn/end' && gate) settled = sawAssistantAfterGate
+        }
+        if (gate) {
+          if (settled) return 'settle'
+          return 'gate'
+        }
+        if (follow) return 'follow'
+        if (dispatch) return 'dispatch'
+        if (sawUser) return 'clarify'
+        return ''
+      }
+
+      function StepBar(props) {
+        var steps = (OFFICE_FACTS && OFFICE_FACTS.steps) || []
+        var current = props.current
+        var currentIdx = -1
+        for (var j = 0; j < steps.length; j += 1) if (steps[j].id === current) currentIdx = j
+
+        function focusStep(id) {
+          setTimeout(function () {
+            var el = document.querySelector('[data-step-id="' + id + '"]')
+            if (el && el.focus) el.focus()
+          }, 0)
+        }
+
+        function move(from, delta) {
+          var next = from + delta
+          if (next < 0 || next >= steps.length) return
+          props.onPick(steps[next].id)
+          focusStep(steps[next].id)
+        }
+
+        return h('div', {
+          className: 'co-steps',
+          role: 'tablist',
+          'aria-label': '开工六步（当前步为推断）',
+          onKeyDown: function (ev) {
+            if (ev.key !== 'ArrowLeft' && ev.key !== 'ArrowRight') return
+            ev.preventDefault()
+            var target = ev.target
+            var id = target && target.getAttribute ? target.getAttribute('data-step-id') : null
+            var from = currentIdx < 0 ? 0 : currentIdx
+            for (var q = 0; q < steps.length; q += 1) if (steps[q].id === id) from = q
+            move(from, ev.key === 'ArrowRight' ? 1 : -1)
+          }
+        }, steps.map(function (step, idx) {
+          var active = step.id === current
+          return h('button', {
+            key: step.id,
+            type: 'button',
+            role: 'tab',
+            className: 'co-step',
+            'data-step-id': step.id,
+            'aria-current': active ? 'step' : undefined,
+            'aria-selected': active ? 'true' : 'false',
+            tabIndex: active || (currentIdx < 0 && idx === 0) ? 0 : -1,
+            title: step.label + (active ? '（当前步为推断）' : ''),
+            onClick: function () { props.onPick(step.id); focusStep(step.id) }
+          }, step.label, active ? h('span', { className: 'co-infer', title: '按工具调用推断，可能滞后' }, '推断') : null)
+        }))
+      }
+
+      function RoleProbe(props) {
+        var ctx = props.ctx
+        var child = props.child
+        var [binding, setBinding] = React.useState(null)
+        var [error, setError] = React.useState('')
+        React.useEffect(function () {
+          var current = null
+          var alive = true
+          setBinding(null)
+          setError('')
+          try {
+            current = ctx.sessions.retain(childTarget(child, props.parentSessionId), { source: 'cto-office/liveboard' })
+          } catch (err) {
+            setError(err && err.message ? err.message : String(err))
+            return NOOP
+          }
+          /* 真源的 binding getter 在 release 后抛错，所以只在 ready 兑现后取一次并留在 state 里，
+           * 不在渲染期读 ref.binding。ready 被拒（会话起不来/已释放）时落到 error，不吞。 */
+          Promise.resolve(current.ready).then(function (ready) {
+            if (alive) setBinding(ready)
+          }, function (err) {
+            if (alive) setError(clip(err && err.message ? err.message : String(err), 120))
+          })
+          return function () {
+            alive = false
+            if (current) { try { current.release() } catch (err) { /* already gone */ } }
+          }
+        }, [child.id, child.mode])
+        var win = useSnap(binding && binding.eventSource ? binding.eventSource : null, EMPTY_SNAP)
+        var events = React.useMemo(function () {
+          var out = []
+          var entries = win.entries || []
+          for (var i = 0; i < entries.length; i += 1) if (entries[i].type === 'event') out.push(entries[i].event)
+          return out
+        }, [win])
+        var gate = gateStatusOf(events)
+        React.useEffect(function () {
+          props.onFeed(child.id, { child: child, events: events, gate: gate, hasMore: !!win.hasMore, error: error })
+        }, [child.id, gate, win, error])
+        return null
+      }
+
+      function Panel(props) {
+        /* 每次渲染开头清掉上一帧的降级原因，否则一次错误会永久挂在 strip 上，
+         * 后来不同的错误也看不见。safefault 只记录本帧第一条。 */
+        safeFault = ''
+        var ctx = props.ctx
+        var sessionId = props.sessionId
+        var useProjection = props.useProjection
+        var [ref, setRef] = React.useState(null)
+        var [binding, setBinding] = React.useState(null)
+        var [rootFault, setRootFault] = React.useState('')
+        var [retainNonce, setRetainNonce] = React.useState(0)
+        var [expanded, setExpanded] = React.useState(null)
+        var [feeds, setFeeds] = React.useState({})
+        var [pinned, setPinned] = React.useState(true)
+        var [seenSeq, setSeenSeq] = React.useState(0)
+        var [announce, setAnnounce] = React.useState('')
+        var [pickedStep, setPickedStep] = React.useState('')
+        var listSnap = useSnap(ctx.sessions.list, { ids: [], byId: {} })
+        var win = useSnap(binding && binding.eventSource ? binding.eventSource : null, EMPTY_SNAP)
+        var catalogRaw = useProjection ? useProjection('subagentCatalog') : undefined
+        var catalog = React.useMemo(function () { return catalogOf(catalogRaw) }, [catalogRaw])
+        var [presets, setPresets] = React.useState({})
+        var [presetFaults, setPresetFaults] = React.useState({})
+        var scrollRef = React.useRef(null)
+        var panelRef = React.useRef(null)
+        var row = listSnap.byId && listSnap.byId[sessionId]
+        var running = !!(row && row.running)
+        var events = React.useMemo(function () {
+          var out = []
+          var entries = win.entries || []
+          for (var i = 0; i < entries.length; i += 1) if (entries[i].type === 'event') out.push(entries[i].event)
+          return out
+        }, [win])
+
+        React.useEffect(function () {
+          var current = null
+          var failed = ''
+          var alive = true
+          setBinding(null)
+          try { current = ctx.sessions.retain(sessionId, { source: 'cto-office/liveboard' }) }
+          catch (error) { failed = clip(error && error.message ? error.message : String(error), 120) }
+          /* ref 只表示「拿到了引用」（可能还没 ready）；订阅走 ready 兑现后的 binding。 */
+          setRef(current)
+          setRootFault(failed)
+          if (current && !failed) {
+            Promise.resolve(current.ready).then(function (ready) {
+              if (alive) setBinding(ready)
+            }, function (error) {
+              if (alive) setRootFault(clip(error && error.message ? error.message : String(error), 120))
+            })
+          }
+          return function () {
+            alive = false
+            if (current) { try { current.release() } catch (error) { /* already gone */ } }
+          }
+        }, [sessionId, retainNonce])
+
+        React.useEffect(function () {
+          var alive = true
+          var ids = catalog.map(function (c) { return c.id + ':' + (c.mode || '') })
+          ;(catalog).forEach(function (child) {
+            if (presets[child.id]) return
+            var pending = null
+            try { pending = resolvePreset(ctx, Object.assign({ parentSessionId: sessionId }, child)) } catch (error) { pending = null }
+            if (!pending || typeof pending.then !== 'function') return
+            pending.then(function (result) {
+              if (!alive) return
+              var preset = result && result.preset
+              if (preset) {
+                setPresets(function (prev) { return prev[child.id] ? prev : Object.assign({}, prev, { [child.id]: preset }) })
+                return
+              }
+              var reason = (result && result.reason) || '未知原因'
+              setPresetFaults(function (prev) {
+                if (prev[child.id] === reason) return prev
+                return Object.assign({}, prev, { [child.id]: reason })
+              })
+            }).catch(NOOP)
+          })
+          return function () { alive = false }
+        }, [catalog.map(function (c) { return c.id }).join('|'), presets])
+
+        React.useEffect(function () {
+          if (pinned) setSeenSeq(latestSeq(events))
+        }, [pinned, events])
+
+        var childrenByRole = {}
+        var unknownChildren = []
+        var roles = roleList()
+        var unknownReasonById = {}
+        var knownRoleIds = {}
+        for (var ri = 0; ri < roles.length; ri += 1) knownRoleIds[roles[ri].id] = true
+        /* 当前 catalog 的 id：留在 presetFaults 里但子会话已经离开的，不再计入 strip */
+        var catalogIds = {}
+        for (var ci = 0; ci < catalog.length; ci += 1) catalogIds[catalog[ci].id] = true
+        var offbookFault = ''
+        var offbookCount = 0
+        for (var i = 0; i < catalog.length; i += 1) {
+          var child = catalog[i]
+          var preset = presets[child.id]
+          if (!preset) {
+            /* 解析失败的子会话不丢：归到「未识别」一行，仍然可展开看事件；
+             * 还在解析中的（既无 preset 也无 fault）先不渲染，避免闪一张空卡。 */
+            if (presetFaults[child.id]) unknownChildren.push({ child: child, reason: presetFaults[child.id] })
+            continue
+          }
+          if (!knownRoleIds[preset]) {
+            /* 解析出了 preset，但它不在角色册里（改名 / 外部造的孩子）：
+             * 同样不许静默丢卡，挂「未识别」并写清未知角色名。 */
+            unknownChildren.push({ child: child, reason: '未知角色 ' + preset })
+            offbookCount += 1
+            if (!offbookFault) offbookFault = '未知角色 ' + preset
+            continue
+          }
+          if (!childrenByRole[preset]) childrenByRole[preset] = []
+          childrenByRole[preset].push(child)
+        }
+        var unknownFault = ''
+        var unknownFaultCount = 0
+        Object.keys(presetFaults).forEach(function (id) {
+          if (!catalogIds[id]) return
+          unknownFaultCount += 1
+          if (!unknownFault) unknownFault = presetFaults[id]
+        })
+        if (offbookCount) {
+          unknownFaultCount += offbookCount
+          if (!unknownFault) unknownFault = offbookFault
+        }
+        if (unknownChildren.length) {
+          roles = roles.concat([{ id: 'unknown', role: '未识别', name: '未识别子会话', order: 9999 }])
+          childrenByRole.unknown = unknownChildren.map(function (entry) {
+            unknownReasonById[entry.child.id] = entry.reason
+            return entry.child
+          })
+        }
+        var root = rootPreset()
+        var gateTok = safe(function () { return gateStatusOf(events) }, '')
+        var needsConfirm = false
+        for (var k = 0; k < events.length; k += 1) {
+          var e = events[k]
+          if (e.type === 'tool/call' && /ask_user/i.test(str(e.data && e.data.name))) {
+            var cid = e.data && e.data.callId
+            var answered = false
+            for (var m = k + 1; m < events.length; m += 1) {
+              if (events[m].type === 'tool/result' && events[m].data && events[m].data.callId === cid) answered = true
+            }
+            if (!answered) needsConfirm = true
+          }
+        }
+        var state = rootFault ? 'degraded' : (!ref ? 'empty' : (events.length && !running ? 'ended' : 'live'))
+        var gateCount = 0
+        var gatePending = 0
+        var rolesStatus = roles.map(function (role) {
+          var children = childrenByRole[role.id] || []
+          var childFeeds = children.map(function (child) { return feeds[child.id] }).filter(Boolean)
+          var status = statusOfRole(role, children, childFeeds, running, events, needsConfirm)
+          var roleGate = role.isRoot ? gateTok : safe(function () { return roleGateOf(childFeeds) }, '')
+          /* 根卡上的 gate 是子代理结论的回声，同一判定不能数两次：只数闸门角色。 */
+          if (isGateRole(role.id)) {
+            if (roleGate) gateCount += 1
+            else gatePending += 1
+          }
+          return { role: role, children: children, feeds: childFeeds, status: status, gate: roleGate }
+        })
+        var newCount = pinned ? 0 : events.filter(function (ev) { return ev.seq > seenSeq }).length
+        var inferredStep = safe(function () { return inferStep(events, gateTok) }, '')
+        var step = pickedStep || inferredStep
+        /* 坏时间戳只该让耗时变成 —，不该把整块面板打到兜底卡（兜底卡留给渲染逻辑本身坏了）。 */
+        var elapsed = safe(function () { return turnElapsed(events) }, '')
+
+        function onScroll(ev) {
+          var el = ev.currentTarget
+          var near = el.scrollHeight - el.scrollTop - el.clientHeight < 24
+          setPinned(near)
+          if (near) setSeenSeq(latestSeq(events))
+        }
+
+        function jumpLatest() {
+          var el = scrollRef.current
+          if (el) el.scrollTop = el.scrollHeight
+          setPinned(true)
+          setSeenSeq(latestSeq(events))
+          setAnnounce('已回到最新')
+        }
+
+        function toggle(role, hasChild) {
+          if (!hasChild && !role.isRoot) return
+          var next = expanded === role.id ? null : role.id
+          setExpanded(next)
+          if (next) setAnnounce('展开 ' + roleLabel(role))
+        }
+
+        function onKeyDown(ev) {
+          if (ev.key !== 'Escape') return
+          if (expanded) {
+            ev.stopPropagation()
+            setExpanded(null)
+            var btn = panelRef.current && panelRef.current.querySelector('[data-role="' + expanded + '"] .co-card-head')
+            if (btn) btn.focus()
+            setAnnounce('已收起 ' + expanded)
+          }
+        }
+
+        var newAfter = pinned ? 0 : seenSeq
+        var theme = (OFFICE_FACTS && OFFICE_FACTS.theme) || {}
+        var themeStyle = {
+          '--co-accent': theme.accent || '#5ac8fa',
+          '--co-ok': theme.ok || '#7fe0a8',
+          '--co-warn': theme.warn || '#f2c66d',
+          '--co-bad': theme.bad || '#ff8f8f'
+        }
+        return h('div', { className: 'co-panel', 'data-state': state, 'data-session': sessionId || '', ref: panelRef, style: themeStyle, onKeyDown: onKeyDown },
+          h('div', { className: 'co-shell' },
+            h('div', { className: 'co-head' },
+              h('div', { className: 'co-title' },
+                h('h2', null, '办公室信息流'),
+                h('span', { className: 'co-badge' }, OFFICE_FACTS.schema || 'office-data')
+              ),
+              h('div', { className: 'co-sum' },
+                h('span', null, h('b', null, rolesStatus.filter(function (x) { return x.status === 'running' }).length), ' 人在跑'),
+                h('span', { className: 'co-sep', 'aria-hidden': 'true' }, '·'),
+                h('span', null, h('b', null, rolesStatus.length), ' 张卡'),
+                h('span', { className: 'co-sep', 'aria-hidden': 'true' }, '·'),
+                h('span', null, h('b', null, gateCount), ' 道闸'),
+                gatePending ? h('span', { className: 'co-sep', 'aria-hidden': 'true' }, '·') : null,
+                gatePending ? h('span', { className: 'co-pending', 'data-pending-gates': String(gatePending) }, gatePending + ' 待判定') : null,
+                h('span', { className: 'co-sep', 'aria-hidden': 'true' }, '·'),
+                h('span', { title: '最近一轮：最后一条用户消息 → 其后最后一条助手消息；未配对显示 —', 'data-elapsed': elapsed || '—' }, h('b', null, elapsed || '—'))
+              )
+            ),
+            h(StepBar, { current: step, onPick: function (id) { setPickedStep(id === inferredStep ? '' : id) } }),
+            h('button', {
+              type: 'button',
+              className: 'co-strip co-strip-action',
+              'data-show': rootFault ? 'true' : 'false',
+              'data-tone': 'bad',
+              'data-strip': 'retain-fault',
+              onClick: function () { setRetainNonce(function (n) { return n + 1 }) }
+            }, '会话事件订阅失败：' + rootFault + ' · 重试'),
+            h('div', { className: 'co-strip', 'data-show': needsConfirm ? 'true' : 'false', 'data-tone': 'warn', 'data-strip': 'confirm' }, '有一项待你确认 · CTO 正在等你回复'),
+            h('div', { className: 'co-strip', 'data-show': !rootFault && win.hasMore ? 'true' : 'false', 'data-tone': 'bad', 'data-strip': 'window' }, '数据不完整：只拿到了尾部窗口，更早事件未加载'),
+            h('div', { className: 'co-strip', 'data-show': safeFault ? 'true' : 'false', 'data-tone': 'warn', 'data-strip': 'fault' }, '部分内容未算出：' + safeFault),
+            h('div', { className: 'co-strip', 'data-show': unknownFault ? 'true' : 'false', 'data-tone': 'warn', 'data-strip': 'preset-fault' }, '有子会话未能识别角色：' + (unknownFault || '') + (unknownFaultCount > 1 ? '（共 ' + unknownFaultCount + ' 个）' : '')),
+            h('div', { className: 'co-list', ref: scrollRef, onScroll: onScroll, role: 'log', 'aria-label': '七角色信息流' },
+              rolesStatus.map(function (item) {
+                var role = item.role
+                var children = item.children
+                var hasChild = children.length > 0
+                var isOpen = expanded === role.id
+                /* 取最近一轮，不是最早那轮：卡面那一行是最显眼的位置，落后一轮等于报旧账。 */
+                var feed = item.feeds.length ? item.feeds[item.feeds.length - 1] : null
+                var feedLast = feed && feed.events.length ? feed.events[feed.events.length - 1] : null
+                /* 轮次按子会话清单里的序号算，不能用 feeds.length：折叠态只挂了最近 3 张，
+                 * feeds 里没有更早的，长度会从 4 掉到 3，写成「第 3 轮」。 */
+                var feedIndex = -1
+                for (var ci = 0; ci < children.length; ci += 1) {
+                  if (feed && feed.child && children[ci].id === feed.child.id) { feedIndex = ci; break }
+                }
+                var roundLabel = feedIndex > 0 ? '第 ' + (feedIndex + 1) + ' 轮' : ''
+                /* 「未识别」不是岗位名：前缀要把原因写进去（未知角色 x / 投影不可用），
+                 * 否则卡面读成「未识别 · 干了活」，等于把人名换成了兜底标签。 */
+                var unknownNameFor = function (child) {
+                  if (role.id !== 'unknown' || !child) return role.role
+                  var why = unknownReasonById[child.id]
+                  return why ? role.role + '（' + why + '）' : role.role
+                }
+                var feedRoleName = function (f) { return unknownNameFor(f && f.child) }
+                var lastText = safe(function () {
+                  if (role.isRoot) return events.length ? describe(events[events.length - 1], role.role) : null
+                  if (feedLast) return withRound(describe(feedLast, feedRoleName(feed)), roundLabel)
+                  return hasChild
+                    ? lineOf(role.id === 'unknown' ? unknownNameFor(children[0]) + ' · 已派工 · ' : '已派工 · ',
+                      children[0].label || children[0].name || children[0].id)
+                    : null
+                }, null)
+                return h('article', {
+                  key: role.id,
+                  className: 'co-card',
+                  'data-role': role.id,
+                  'data-status': item.status,
+                  'data-gate': item.gate || 'none',
+                  'data-expanded': isOpen ? 'true' : 'false'
+                },
+                  h('button', {
+                    type: 'button',
+                    className: 'co-card-head',
+                    'aria-expanded': isOpen ? 'true' : 'false',
+                    'aria-controls': 'co-body-' + role.id,
+                    onClick: function () { toggle(role, hasChild) }
+                  },
+                    h('span', { className: 'co-dot', 'aria-hidden': 'true' }),
+                    h('span', { className: 'co-role' }, roleLabel(role)),
+                    h('span', { className: 'co-preset' }, role.id),
+                    h('span', { className: 'co-spacer' }),
+                    /* 根卡不挂 chip：它那枚是根会话自己的 GATE 行，和子代理结论可能互相打架；
+                     * 结论看闸门角色卡头。data-gate 属性仍保留，排障用。 */
+                    isGateRole(role.id) ? h(GateChip, { value: item.gate }) : null
+                  ),
+                  (isOpen ? children : children.slice(-3)).map(function (child) {
+                    return h(RoleProbe, {
+                      key: child.id,
+                      ctx: ctx,
+                      child: child,
+                      parentSessionId: sessionId,
+                      onFeed: function (id, data) {
+                        setFeeds(function (prev) {
+                          var old = prev[id]
+                          var oldSeq = old && old.events.length ? old.events[old.events.length - 1].seq : -1
+                          var newSeq = data.events.length ? data.events[data.events.length - 1].seq : -1
+                          if (old && old.gate === data.gate && old.hasMore === data.hasMore && old.error === data.error && oldSeq === newSeq && old.events.length === data.events.length) return prev
+                          var next = Object.assign({}, prev)
+                          next[id] = data
+                          return next
+                        })
+                      }
+                    })
+                  }),
+                  lastText && !isOpen ? h('div', { className: 'co-last' }, lastText.text) : null,
+                  !isOpen && children.length > 3 ? h('div', { className: 'co-more' }, '还有 ' + (children.length - 3) + ' 张未展开，点开再看') : null,
+                  isOpen
+                    ? (role.isRoot
+                      ? h('div', { className: 'co-body', id: 'co-body-' + role.id },
+                        h('div', { className: 'co-ops', 'data-run-group': 'true' }, h(EventList, { events: events, roleName: role.role, newAfter: newAfter })),
+                        win.hasMore ? h('div', { className: 'co-more' }, '更早事件未加载（只回放了尾部 500 条）') : null)
+                      : (item.feeds.length
+                        ? h('div', { className: 'co-body', id: 'co-body-' + role.id }, item.feeds.map(function (f) {
+                          var fc = f.child
+                          return h('div', { key: fc.id, className: 'co-run', 'data-run-group': 'true' },
+                            h('div', { className: 'co-run-h' }, '子会话 · ' + clip(fc.label || fc.name || fc.id, 70)),
+                            f.error ? h('div', { className: 'co-more' }, '子会话读取失败：' + f.error) : h(EventList, { events: f.events, roleName: feedRoleName(f) }),
+                            f.hasMore ? h('div', { className: 'co-more' }, '更早事件未加载（只回放了尾部 500 条）') : null)
+                        }))
+                        : h('div', { className: 'co-body' }, h('div', { className: 'co-empty' }, '还没有派工记录。'))))
+                    : null
+                )
+              }),
+              !rootFault && !events.length && !win.hasMore ? h('div', { className: 'co-empty', 'data-empty': 'no-events' }, '这轮还没有事件。先在对话里说一句话，或派一张卡。') : null
+            ),
+            h('div', { className: 'co-foot' },
+              h('button', { type: 'button', className: 'co-return', 'data-show': pinned ? 'false' : 'true', onClick: jumpLatest }, '回到最新', newCount ? ' · ' + newCount + ' 条' : '')
+            ),
+            h('div', { className: 'co-sr', 'aria-live': 'polite' }, announce)
+          )
+        )
+      }
+
+      function roleLabel(role) {
+        return role.role || role.name || role.id
+      }
+
+      function GateChip(props) {
+        var value = props.value
+        if (value === '不等') return h('span', { className: 'co-gate', 'data-gate': 'blocked' }, '待确认')
+        var chip = gateChip(value)
+        return h('span', { className: 'co-gate', 'data-gate': value || 'none' },
+          h('span', { className: 'co-sym', 'aria-hidden': 'true' }, chip.symbol),
+          h('span', null, chip.text)
+        )
+      }
+
+      function latestSeq(events) {
+        return events.length ? (events[events.length - 1].seq || 0) : 0
+      }
+
+
+
+      function autoOpen(ctx) {
+        function dismissed() {
+          try { return window.localStorage.getItem(DISMISS_KEY) === '1' } catch (error) { return true }
+        }
+        function setDismissed(value) {
+          try { window.localStorage.setItem(DISMISS_KEY, value ? '1' : '0') } catch (error) { /* storage unavailable */ }
+        }
+        var lastAuto = 0
+        function openFor(sessionId) {
+          if (!sessionId || dismissed()) return
+          var preset = readPresetFromList(ctx, sessionId)
+          if (preset !== rootPresetId()) return
+          var tabs = ctx.sidebarRight.openTabs.getSnapshot() || []
+          for (var i = 0; i < tabs.length; i += 1) {
+            if (tabs[i].sessionId === sessionId && tabs[i].kind === KIND) return
+          }
+          try {
+            ctx.sidebarRight.openTab(KIND)
+            lastAuto = Date.now()
+          } catch (error) { /* no on-screen session */ }
+        }
+        function tick() { openFor(ctx.sidebarRight.mounted.getSnapshot()) }
+        var offMounted = ctx.sidebarRight.mounted.subscribe(function () { tick() })
+        var offList = ctx.sessions.list.subscribe(function () { tick() })
+        var previous = new Map()
+        var offTabs = ctx.sidebarRight.openTabs.subscribe(function () {
+          var tabs = ctx.sidebarRight.openTabs.getSnapshot() || []
+          var present = new Map()
+          for (var i = 0; i < tabs.length; i += 1) {
+            if (tabs[i].kind !== KIND) continue
+            present.set(tabs[i].sessionId, true)
+          }
+          present.forEach(function (_v, sessionId) { previous.set(sessionId, true) })
+          var mountedNow = ctx.sidebarRight.mounted.getSnapshot()
+          previous.forEach(function (_v, sessionId) {
+            if (!present.get(sessionId)) {
+              previous.delete(sessionId)
+              var sameSession = sessionId === mountedNow
+              var visible = typeof document !== 'undefined' && document.visibilityState === 'visible'
+              if (sameSession && visible && Date.now() - lastAuto > 1200) setDismissed(true)
+            }
+          })
+          if (!dismissed()) return
+          var mounted = ctx.sidebarRight.mounted.getSnapshot()
+          if (mounted && present.get(mounted) && Date.now() - lastAuto > 1200) setDismissed(false)
+        })
+        tick()
+        return function () { offMounted(); offList(); offTabs() }
+      }
+
+      return {
+        inject: ['slots', 'locale', 'sidebarRightTabs', 'sidebarRight', 'sessions'],
+        apply: function (ctx) {
+          /* 三个席位各自独立：任何一个注册失败都只降级自己，不能让整份插件不加载。
+           * （register 或 effect 同步抛出时，宿主会把它当成 apply 失败而卸掉整个 bundle。） */
+          function guard(label, fn) {
+            function warn(error) {
+              var text = label + ' 注册失败：' + (error && error.message ? error.message : String(error))
+              try { console.warn('[cto-office] ' + text) } catch (ignored) { /* console 也可能不可用 */ }
+            }
+            try {
+              return ctx.effect(function () {
+                try { return fn() } catch (error) { warn(error) }
+              }, label)
+            } catch (error) { warn(error) }
+          }
+
+          guard('cto-office: role-feed tab kind', function () {
+            return ctx.sidebarRightTabs.register({
+              id: TAB_ID,
+              kind: KIND,
+              priority: 'extension',
+              title: function () { return '办公室信息流' },
+              guide: [{ id: TAB_ID + ':guide', order: 10, title: function () { return '办公室信息流' }, description: function () { return '七角色实时信息流' } }],
+              keepMounted: false
+            })
+          })
+
+          guard('cto-office: role-feed pane', function () {
+            return ctx.slots.inject('sidebar.right.pane.tab', function () {
+              return ctx.slots.register({ name: 'sidebar.right.pane.tab', key: TAB_ID }, function (props) {
+                return h(ErrorBoundary, { sessionId: props && props.sessionId }, h(Panel, Object.assign({}, props, { ctx: ctx })))
+              })
+            })
+          })
+
+          guard('cto-office: role-feed auto open', function () { return autoOpen(ctx) })
+        }
+      }
+    }
+  })
+})()

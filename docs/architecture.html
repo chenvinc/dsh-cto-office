@@ -461,13 +461,13 @@ code,.mono{font-family:var(--mono);font-size:.86em}
 <!-- office-data:start -->
 <script type="application/json" id="office-data">
 {
-  "schema": "cto-office/office-data@1",
+  "schema": "cto-office/office-data@2",
   "bundle": "@chy/dsh-cto-office@0.1.0",
   "provenance": {
     "sourceFile": "cordis.patch.yml",
-    "sha256": "a0ba8d54db413e4222d2ef8c6fd89cabeea17a449233656db0650333f802fb26",
-    "sha256Short": "a0ba8d54",
-    "lines": 644,
+    "sha256": "97c7728095772e8acad28fa0e3dbaf59cdb522e4771e47454bc949bddcbe920e",
+    "sha256Short": "97c77280",
+    "lines": 653,
     "script": "sync-office-data@2",
     "verify": "generated-from-patch"
   },
@@ -477,6 +477,38 @@ code,.mono{font-family:var(--mono);font-size:.86em}
     "posts": 6,
     "dispatchEdges": 6,
     "allowedPresets": 6
+  },
+  "steps": [
+    {
+      "id": "clarify",
+      "label": "澄清"
+    },
+    {
+      "id": "open-card",
+      "label": "开卡"
+    },
+    {
+      "id": "dispatch",
+      "label": "派工"
+    },
+    {
+      "id": "follow",
+      "label": "跟进"
+    },
+    {
+      "id": "gate",
+      "label": "闸门"
+    },
+    {
+      "id": "settle",
+      "label": "结算"
+    }
+  ],
+  "theme": {
+    "accent": "#5ac8fa",
+    "ok": "#7fe0a8",
+    "warn": "#f2c66d",
+    "bad": "#ff8f8f"
   },
   "presets": [
     {

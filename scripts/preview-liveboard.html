@@ -1,0 +1,924 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>办公室信息流 · 真组件 harness</title>
+<style>
+  :root{color-scheme:dark}
+  *{box-sizing:border-box}
+  body{margin:0;background:#05080b;color:#e8eef4;font:13px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif}
+  .pv-bar{display:flex;flex-wrap:wrap;gap:6px;padding:10px 12px;border-bottom:1px solid #232c37;background:#0d141b;align-items:center}
+  .pv-bar button{appearance:none;border:1px solid #33404e;background:#101922;color:#94a3b2;border-radius:6px;padding:5px 10px;font:12px inherit;cursor:pointer}
+  .pv-bar button[aria-pressed="true"]{border-color:#5ac8fa;color:#5ac8fa;background:rgba(90,200,250,.1)}
+  .pv-bar code{margin-left:auto;color:#6f8090;font:11px ui-monospace,Menlo,monospace}
+  .pv-note{padding:6px 12px;color:#6f8090;font-size:11px;border-bottom:1px solid #232c37}
+  .pv-note b{color:#f2c66d;font-weight:600}
+  .pv-wrap{display:flex;justify-content:center;padding:16px}
+  .pv-frame{width:340px;height:720px;border:1px solid #232c37;border-radius:10px;overflow:hidden}
+  #host{height:100%}
+  .pv-out{margin:0 12px 16px;padding:8px 10px;border:1px solid #232c37;border-radius:8px;background:#0b1016;font:11px/1.5 ui-monospace,Menlo,monospace;color:#94a3b2;white-space:pre-wrap;max-height:240px;overflow:auto}
+</style>
+</head>
+<body>
+<div class="pv-bar" role="group" aria-label="场景">
+  <button type="button" data-scenario="live" aria-pressed="true">live</button>
+  <button type="button" data-scenario="empty-window" aria-pressed="false">empty-window</button>
+  <button type="button" data-scenario="window-partial" aria-pressed="false">window-partial</button>
+  <button type="button" data-scenario="retain-fail" aria-pressed="false">retain-fail</button>
+  <button type="button" data-scenario="ended" aria-pressed="false">ended</button>
+  <button type="button" data-scenario="partial" aria-pressed="false">partial</button>
+  <button type="button" data-scenario="preset-fault" aria-pressed="false">preset-fault</button>
+  <button type="button" data-scenario="retain-peak" aria-pressed="false">retain-peak</button>
+  <button type="button" data-scenario="privacy" aria-pressed="false">privacy</button>
+  <button type="button" data-scenario="crash" aria-pressed="false">crash</button>
+  <button type="button" id="pv-all">跑全部 + 断言</button>
+  <code>真组件 · scripts/preview-liveboard.html</code>
+</div>
+<p class="pv-note">本页加载<b>真实 client.js</b>（不是手写 mock）：桩 <code>window.__ModuleLoader__</code> + 最小 ctx，React 取自仓库 <code>node_modules</code>。
+  <code>crash</code> 场景注入的是「宿主会话行坏掉」这类渲染期真抛错（没有兜底值可退）；坏时间戳不走兜底卡，<code>turnElapsed</code> 已被 <code>safe()</code> 兜成 <code>—</code>，由 <code>partial</code> 场景断言。
+  崩溃口径按 <code>console.error()</code> 调用数计 1 条；React dev 构建捕获后还会把错误再 <code>throw</code> 到 window（多出 <code>Uncaught Error</code>），那是 dev-only，不算多记。
+  <br>本页<b>证明不到</b>：① 真 Host 上 <code>sessions.retain</code> 的成功/失败与时序；② 真实会话事件的完整形状（这里只有本页构造的几种）；③ 宿主对 <code>sidebarRightTabs.register</code> 的壳校验与去重；④ 真实 <code>useProjection('subagentCatalog')</code> 的帧与空窗。它只证明渲染、降级与脱敏行为。</p>
+<div class="pv-wrap"><div class="pv-frame" id="frame"><div id="host"></div></div></div>
+<div class="pv-out" id="out">（等待断言输出…）</div>
+
+<script src="../node_modules/react/umd/react.development.js"></script>
+<script src="../node_modules/react-dom/umd/react-dom.development.js"></script>
+<script>
+/* 必须在 client.js 之前：真文件的 IIFE 末尾会同步调用 load()。 */
+window.__liveboard = { handoff: null, requires: [], reports: [] }
+window.__ModuleLoader__ = {
+  load: function (handoff) { window.__liveboard.handoff = handoff }
+}
+</script>
+<script src="../client.js"></script>
+<script>
+(function () {
+  'use strict'
+
+  var out = document.getElementById('out')
+  if (!window.React || !window.ReactDOM) {
+    out.textContent = '缺少 react：在仓库根目录建 node_modules 软链（不引网络资源）\n' +
+      'mkdir -p node_modules && ln -sfn <deepseek-harness>/node_modules/.pnpm/react@18.3.1/node_modules/react node_modules/react && ' +
+      'ln -sfn <deepseek-harness>/node_modules/.pnpm/react-dom@18.3.1_react@18.3.1/node_modules/react-dom node_modules/react-dom'
+    console.error('[liveboard] FATAL: react/react-dom 未加载，见页面提示')
+    return
+  }
+  var h = React.createElement
+  var LB = window.__liveboard
+  var handoff = LB.handoff
+  var host = document.getElementById('host')
+  var frame = document.getElementById('frame')
+  var root = null
+  var paneRender = null
+  var tabDefinition = null
+  var opened = 0
+  var retainStats = { active: 0, peak: 0, total: 0, released: 0 }
+  var requireMark = 0
+
+  function log(line) {
+    console.log('[liveboard] ' + line)
+    out.textContent = out.textContent.replace('（等待断言输出…）', '') + '\n' + line
+  }
+
+  if (!handoff) {
+    log('FATAL: window.__ModuleLoader__.load 没有被 client.js 调用（真组件没加载）')
+    return
+  }
+
+  /* ── 1. 注入真组件自带样式：宿主会读 meta().stylesheets，harness 自己照做 ── */
+  var meta = typeof handoff.meta === 'function' ? handoff.meta() : {}
+  var sheets = (meta && meta.stylesheets) || {}
+  var sheetNames = Object.keys(sheets)
+  sheetNames.forEach(function (name) {
+    var sheet = sheets[name]
+    var style = document.createElement('style')
+    style.setAttribute('data-sheet', name)
+    style.textContent = typeof sheet.text === 'function' ? sheet.text() : ''
+    document.head.appendChild(style)
+  })
+
+  /* ── 2. require 桩：只认真需要的模块，不许引网络资源 ── */
+  function requireStub(spec) {
+    LB.requires.push(spec)
+    if (spec === 'react') return window.React
+    if (spec === 'react-dom') return window.ReactDOM
+    if (spec === 'react-dom/client') return window.ReactDOM
+    if (spec === '@deepseek-ai/dsh-client-store') {
+      return { notifySubscribers: function () {}, Notifier: function () {} }
+    }
+    throw new Error('preview harness: unexpected require(' + spec + ')')
+  }
+
+  /* ── 3. 事件/快照小工具 ── */
+  function source(initial) {
+    var listeners = []
+    var snap = initial
+    return {
+      getSnapshot: function () { return snap },
+      subscribe: function (cb) {
+        listeners.push(cb)
+        return function () {
+          var i = listeners.indexOf(cb)
+          if (i >= 0) listeners.splice(i, 1)
+        }
+      },
+      _set: function (next) {
+        snap = next
+        listeners.slice().forEach(function (cb) { cb() })
+      }
+    }
+  }
+
+  function windowOf(entries, hasMore) {
+    return {
+      entries: entries || [],
+      hasMore: !!hasMore,
+      revision: (entries || []).length,
+      change: { kind: 'replace', entries: entries || [] }
+    }
+  }
+
+  function row(model) {
+    return { type: 'event', event: model }
+  }
+
+  function user(seq, time, text) {
+    return row({ type: 'user/message', seq: seq, time: time, data: { role: 'user', content: [{ type: 'text', text: text }], source: { kind: 'user' } } })
+  }
+
+  function assistant(seq, time, text) {
+    return row({ type: 'assistant/message', seq: seq, time: time, data: { text: text } })
+  }
+
+  function toolCall(seq, time, name, args, callId) {
+    return row({ type: 'tool/call', seq: seq, time: time, data: { name: name, arguments: JSON.stringify(args), callId: callId } })
+  }
+
+  function toolResult(seq, time, callId, text) {
+    return row({ type: 'tool/result', seq: seq, time: time, data: { callId: callId, content: [{ type: 'text', text: text }] } })
+  }
+
+  function turnEnd(seq, time) {
+    return row({ type: 'turn/end', seq: seq, time: time, data: {} })
+  }
+
+  /* ── 4. 场景数据 ── */
+  var T0 = 1731574800000
+
+  function rootRound(opts) {
+    var o = opts || {}
+    var entries = [
+      user(12, T0, '把右栏信息流做成真组件，别再手写 mock'),
+      toolCall(13, T0 + 2000, 'subagent', { prompt: '派工：右栏信息流', description: '派工 cto-builder 实现信息流' }, 'c1'),
+      toolCall(14, T0 + 4000, 'subagent', { prompt: '审 diff 与契约', description: '派工 cto-reviewer 评审' }, 'c2'),
+      assistant(15, T0 + 96000, '已派工：工程师改代码、评审审 diff、QA 复现。下一次汇总结论。'),
+      turnEnd(16, T0 + 96000)
+    ]
+    if (o.gate) entries.splice(4, 0, toolResult(16, T0 + 90000, 'c2', 'GATE: ' + o.gate + ' 两处 P1'))
+    return entries
+  }
+
+  function childRound(text, gate) {
+    var entries = [
+      user(101, T0 + 5000, text),
+      toolCall(102, T0 + 6000, 'bash', { command: 'npm run check', description: '跑校验' }, 'k1'),
+      toolResult(103, T0 + 9000, 'k1', 'patch sha256=97c7728 ok'),
+      assistant(104, T0 + 30000, gate ? (text + '\nGATE: ' + gate) : (text + ' 完成'))
+    ]
+    return entries
+  }
+
+  /* 3 角色 × 每角色 6 轮：折叠态每个角色只挂最近 3 张，理论 retain 峰值 = 1 + 3×3 = 10。 */
+  function peakChildren() {
+    var out = []
+    var roles = [
+      { preset: 'cto-builder', label: '工程师' },
+      { preset: 'cto-reviewer', label: '评审' },
+      { preset: 'cto-qa', label: 'QA' }
+    ]
+    for (var r = 0; r < roles.length; r += 1) {
+      for (var i = 1; i <= 6; i += 1) {
+        var gate = roles[r].preset === 'cto-reviewer' && i === 6 ? 'CHANGES' : ''
+        out.push({
+          id: 'child-' + roles[r].preset + '-' + i,
+          mode: 'continuable',
+          preset: roles[r].preset,
+          label: roles[r].label + ' · 第 ' + i + ' 轮',
+          events: childRound(roles[r].label + '第 ' + i + ' 轮', gate)
+        })
+      }
+    }
+    return out
+  }
+
+  var LONG_PROMPT = '把右栏信息流改成真组件，别再手写 mock；' +
+    '每一张卡都要带状态、闸门与耗时，折叠态只留最近三张但闸门要露出来，' +
+    '键盘 Esc 收起、方向键在步进条上移动，宽度收到 300px 也不许出现横向滚动，' +
+    '异常一律降级成兜底卡而不是让整块右栏变白。这段话故意写长，用来验证正文 72 字、整行 100 字的硬上限。'
+
+  function scene(name) {
+    var children = []
+    var rootEvents = []
+    var hasMore = false
+    var running = false
+    var failRootRetain = false
+    var crashRow = false
+
+    if (name === 'live' || name === 'ended') {
+      var gate = name === 'live' ? 'CHANGES' : 'PASS'
+      running = name === 'live'
+      rootEvents = rootRound({ gate: gate })
+      children = [
+        { id: 'child-builder', mode: 'continuable', preset: 'cto-builder', label: '工程师 · 实现右栏', events: childRound('实现信息流面板', '') },
+        { id: 'child-review-1', mode: 'continuable', preset: 'cto-reviewer', label: '评审 · 第 1 轮', events: childRound('初审 diff', '') },
+        { id: 'child-review-2', mode: 'continuable', preset: 'cto-reviewer', label: '评审 · 第 2 轮', events: childRound('复审 diff', '') },
+        { id: 'child-review-3', mode: 'continuable', preset: 'cto-reviewer', label: '评审 · 第 3 轮', events: childRound('三审 diff', '') },
+        { id: 'child-review-4', mode: 'continuable', preset: 'cto-reviewer', label: '评审 · 第 4 轮', events: childRound('终审 diff', gate) },
+        { id: 'child-qa', mode: 'continuable', preset: 'cto-qa', label: 'QA · 复现', events: childRound('独立复现', name === 'live' ? 'FAIL' : '') },
+        { id: 'child-arch', mode: 'continuable', preset: 'cto-architect', label: '架构师 · 契约', events: childRound('核对契约', '') }
+      ]
+    }
+    /* retain 成功、订阅就绪，但窗口里一条事件都没有 */
+    if (name === 'empty-window') {
+      rootEvents = []
+      hasMore = false
+      running = false
+    }
+    /* 只拿到尾部窗口：有事件但 hasMore=true（更早的没加载） */
+    if (name === 'window-partial') {
+      rootEvents = [user(120, T0, '只回放尾部窗口'), toolCall(121, T0 + 1200, 'bash', { command: 'npm run check' }, 'p1')]
+      hasMore = true
+      running = true
+    }
+    /* 根级 retain 抛错：桩里第一次抛、第二次成功 */
+    if (name === 'retain-fail') {
+      failRootRetain = true
+      running = true
+      rootEvents = rootRound({ gate: 'CHANGES' })
+      children = [
+        { id: 'child-builder', mode: 'continuable', preset: 'cto-builder', label: '工程师 · 实现右栏', events: childRound('实现信息流面板', '') },
+        { id: 'child-review-4', mode: 'continuable', preset: 'cto-reviewer', label: '评审 · 终审', events: childRound('终审 diff', 'CHANGES') }
+      ]
+    }
+    if (name === 'partial') {
+      running = true
+      rootEvents = rootRound({ gate: 'CHANGES' })
+      /* data.text 的 getter 抛错：落在 safe(()=>gateStatusOf(events)) 里，面板必须还在 */
+      rootEvents.splice(3, 0, row({
+        type: 'assistant/message',
+        seq: 15,
+        time: T0 + 30000,
+        data: Object.defineProperty({}, 'text', {
+          enumerable: true,
+          get: function () { throw new Error('闸门输入坏了') }
+        })
+      }))
+      /* 坏时间戳两种都试：字符串（→ NaN，不许落成 0s）与 valueOf 抛错（→ safe 兜底） */
+      rootEvents.push(row({ type: 'assistant/message', seq: 16, time: 'bad-clock', data: { text: '时间戳是字符串' } }))
+      rootEvents.push(row({ type: 'assistant/message', seq: 17, time: { valueOf: function () { throw new Error('bad clock') } }, data: { text: '时间戳坏了' } }))
+      children = [
+        { id: 'child-builder', mode: 'continuable', preset: 'cto-builder', label: '工程师 · 实现右栏', events: childRound('实现信息流面板', '') },
+        { id: 'child-review-4', mode: 'continuable', preset: 'cto-reviewer', label: '评审 · 终审', events: childRound('终审 diff', 'CHANGES') }
+      ]
+    }
+    /* 子会话的 agentPreset 解析失败：不许静默丢卡，要出 fault strip 并挂到「未识别」一行 */
+    if (name === 'preset-fault') {
+      running = true
+      rootEvents = rootRound({ gate: 'CHANGES' })
+      children = [
+        { id: 'child-builder', mode: 'continuable', preset: 'cto-builder', label: '工程师 · 实现右栏', events: childRound('实现信息流面板', '') },
+        { id: 'child-mystery', mode: 'continuable', preset: '', failReady: true, label: '不明岗位 · 子会话', events: childRound('投了一张没写 preset 的工单', '') }
+      ]
+    }
+    /* 已解析出 preset，但不在角色册里（改名 / 外部造的孩子）：不许静默丢卡 */
+    if (name === 'offbook-preset') {
+      running = true
+      rootEvents = rootRound({ gate: 'CHANGES' })
+      children = [
+        { id: 'child-builder', mode: 'continuable', preset: 'cto-builder', label: '工程师 · 实现右栏', events: childRound('实现信息流面板', '') },
+        { id: 'child-review-4', mode: 'continuable', preset: 'cto-reviewer', label: '评审 · 终审', events: childRound('终审 diff', 'CHANGES') },
+        { id: 'child-offbook', mode: 'continuable', preset: 'liangshen', label: '外部代理 · 量神', events: childRound('外部代理干了活', '') }
+      ]
+    }
+    /* 3 角色 × 每角色 6 轮：折叠态每角色只挂最近 3 张，理论 retain 峰值 = 1 + 3×3 = 10 */
+    if (name === 'retain-peak') {
+      running = true
+      rootEvents = rootRound({ gate: 'CHANGES' })
+      children = peakChildren()
+    }
+    /* 长文本 + 明文凭据：DOM 里不许出现 sk-live，正文 ≤72、整行 ≤100 */
+    if (name === 'privacy') {
+      running = true
+      rootEvents = [
+        user(12, T0, LONG_PROMPT),
+        toolCall(13, T0 + 1000, 'bash', { command: 'curl -H "Authorization: Bearer sk-live-abcdef0123456789" https://api.example.com' }, 's1'),
+        toolCall(14, T0 + 2000, 'bash', { description: 'Authorization: Bearer sk-live-abcdef0123456789', command: 'curl https://api.example.com' }, 's2'),
+        toolResult(15, T0 + 3000, 's1', 'token=sk-live-abcdef0123456789 ok'),
+        assistant(16, T0 + 4000, '已收到，密钥不该出现在面板里'),
+        turnEnd(17, T0 + 4000)
+      ]
+      children = [
+        { id: 'child-builder', mode: 'continuable', preset: 'cto-builder', label: '工程师 · 实现右栏', events: childRound('实现信息流面板', '') }
+      ]
+    }
+    if (name === 'crash') {
+      /* 渲染期真抛错：宿主给的会话行坏掉（running 的 getter 抛）。
+       * 这一类没有兜底值可退，必须由 ErrorBoundary 接住并渲染兜底卡。
+       * 坏时间戳不在这里——turnElapsed 已包 safe(…, '')，由 partial 场景证明它退化成 —。 */
+      crashRow = true
+      rootEvents = [
+        user(12, T0, '把右栏信息流做成真组件'),
+        assistant(13, T0 + 2000, '先把面板立起来')
+      ]
+      running = true
+      children = [
+        { id: 'child-builder', mode: 'continuable', preset: 'cto-builder', label: '工程师 · 实现右栏', events: childRound('实现信息流面板', '') }
+      ]
+    }
+    return { name: name, rootId: 'session-root', rootEvents: rootEvents, hasMore: hasMore, running: running, children: children, failRootRetain: failRootRetain, crashRow: crashRow }
+  }
+
+  /* ── 5. 用场景造一个假世界 + 最小 ctx ── */
+  var world = null
+
+  function buildWorld(sc) {
+    var sessions = {}
+    var presets = {}
+    var byId = {}
+    var catalog = []
+
+    sessions[sc.rootId] = { source: source(windowOf(sc.rootEvents, sc.hasMore)) }
+    presets[sc.rootId] = 'cto-office'
+    byId[sc.rootId] = { id: sc.rootId, running: sc.running, projectionValues: { agentPreset: 'cto-office' } }
+    if (sc.crashRow) {
+      /* 只让 reading 抛：这是 Panel 渲染体里没有兜底值的读取，正是边界该接住的那类 */
+      Object.defineProperty(byId[sc.rootId], 'running', { get: function () { throw new Error('boom') } })
+    }
+
+    sc.children.forEach(function (child) {
+      sessions[child.id] = { source: source(windowOf(child.events, false)), failReady: !!child.failReady }
+      presets[child.id] = child.preset
+      byId[child.id] = { id: child.id, running: false, projectionValues: { agentPreset: child.preset } }
+      catalog.push({ id: child.id, mode: child.mode, label: child.label, name: child.label })
+    })
+
+    return { sc: sc, rootId: sc.rootId, rootRetainAttempts: 0, sessions: sessions, presets: presets, byId: byId, catalog: catalog, list: source({ ids: Object.keys(byId), byId: byId }) }
+  }
+
+  function buildCtx(w) {
+    var openTabs = source([])
+    var mounted = source(w.rootId)
+    return {
+      sessions: {
+        list: w.list,
+        retain: function (target, options) {
+          var id = typeof target === 'string' ? target : target.childSessionId
+          var entry = w.sessions[id]
+          if (w.sc.failRootRetain && id === w.rootId) {
+            w.rootRetainAttempts += 1
+            if (w.rootRetainAttempts === 1) throw new Error('session controller unavailable')
+          }
+          if (!entry) throw new Error('sessions.retain: unknown session ' + id)
+          retainStats.total += 1
+          retainStats.active += 1
+          if (retainStats.active > retainStats.peak) retainStats.peak = retainStats.active
+          var released = false
+          var binding = {
+            sessionId: id,
+            session: {
+              projections: {
+                faceOf: function (key) {
+                  return source(key === 'agentPreset' ? w.presets[id] : undefined)
+                }
+              }
+            },
+            eventSource: entry.source
+          }
+          /* 照真源收紧（service.ts 的 get binding() 在 release 后抛）：
+           * 读已释放的 binding 必须报错，不能像旧桩那样一直返回同一个对象。 */
+          var resolveReady = null
+          var rejectReady = null
+          var ready = new Promise(function (resolve, reject) { resolveReady = resolve; rejectReady = reject })
+          /* 真源 ClientSessionReference 构造时 void this.ready.catch(() => {})：
+           * 没人消费 rejected ready 也不会变成 unhandled rejection。 */
+          void ready.catch(function () {})
+          var reference = {
+            sessionId: id,
+            ready: ready,
+            release: function () {
+              if (released) return
+              released = true
+              retainStats.active -= 1
+              retainStats.released += 1
+              /* service.ts release(): readiness.reject(new Error('Session reference "…" is released')) */
+              rejectReady(new Error('Session reference "' + id + '" is released'))
+            }
+          }
+          if (entry.failReady) rejectReady(new Error('agentPreset 投影不可用'))
+          else if (!entry.pendingReady) resolveReady(binding)
+          Object.defineProperty(reference, 'binding', {
+            enumerable: true,
+            get: function () {
+              if (released) throw new Error('Session reference "' + id + '" is released')
+              return binding
+            }
+          })
+          return reference
+        }
+      },
+      sidebarRight: {
+        openTab: function () { opened += 1 },
+        openTabs: openTabs,
+        mounted: mounted
+      },
+      sidebarRightTabs: {
+        register: function (definition) { tabDefinition = definition; return function () {} }
+      },
+      slots: {
+        inject: function (name, factory) { return factory() },
+        register: function (options, Component) { paneRender = Component; return function () {} }
+      },
+      locale: { register: function () { return function () {} } },
+      effect: function (fn) {
+        var dispose = fn()
+        return typeof dispose === 'function' ? dispose : function () {}
+      }
+    }
+  }
+
+  function mount(sc) {
+    if (root) { root.unmount(); root = null }
+    /* 卸载上一场景会 release 它自己的 retain，必须在之后清零，否则计数会跨场景串味 */
+    retainStats = { active: 0, peak: 0, total: 0, released: 0 }
+    requireMark = LB.requires.length
+    world = buildWorld(sc)
+    var ctx = buildCtx(world)
+    var module = handoff.factory(requireStub)
+    module.apply(ctx)
+    var useProjection = function (key) { return key === 'subagentCatalog' ? world.catalog : undefined }
+    var node = React.createElement(paneRender, { key: sc.name, sessionId: sc.rootId, useProjection: useProjection })
+    root = ReactDOM.createRoot(host)
+    root.render(node)
+    return ctx
+  }
+
+  function wait(ms) {
+    return new Promise(function (resolve) { setTimeout(resolve, ms) })
+  }
+
+  /* ── 6. 读数 ── */
+  function panelEl() { return document.querySelector('.co-panel') }
+
+  function readings() {
+    var panel = panelEl()
+    var cards = Array.prototype.slice.call(document.querySelectorAll('.co-card'))
+    var sum = panel ? panel.querySelector('.co-sum') : null
+    return {
+      state: panel ? panel.getAttribute('data-state') : null,
+      session: panel ? panel.getAttribute('data-session') : null,
+      cards: cards.length,
+      cardRows: cards.map(function (card) {
+        return {
+          role: card.getAttribute('data-role'),
+          status: card.getAttribute('data-status'),
+          gate: card.getAttribute('data-gate'),
+          expanded: card.getAttribute('data-expanded')
+        }
+      }),
+      lastTexts: Array.prototype.map.call(document.querySelectorAll('.co-card'), function (card) {
+        var last = card.querySelector('.co-last')
+        return { role: card.getAttribute('data-role'), last: last ? last.textContent.replace(/\s+/g, ' ').trim() : '' }
+      }),
+      gateChips: Array.prototype.map.call(document.querySelectorAll('.co-gate'), function (chip) {
+        return chip.textContent.replace(/\s+/g, ' ').trim()
+      }),
+      collapsedGateChanges: !!document.querySelector('.co-card[data-expanded="false"][data-gate="CHANGES"]'),
+      runs: document.querySelectorAll('.co-run').length,
+      more: Array.prototype.map.call(document.querySelectorAll('.co-more'), function (n) { return n.textContent.trim() }),
+      summary: sum ? sum.textContent.replace(/\s+/g, ' ').trim() : '',
+      fallback: !!document.querySelector('.co-fallback'),
+      fallbackText: (document.querySelector('.co-fallback-msg') || {}).textContent || '',
+      retry: !!document.querySelector('.co-retry'),
+      emptyHint: !!document.querySelector('[data-empty="no-events"]'),
+      hasStack: panel ? panel.getAttribute('data-has-stack') : null,
+      elapsed: (function () { var el = document.querySelector('[data-elapsed]'); return el ? el.getAttribute('data-elapsed') : null })(),
+      unknownCard: !!document.querySelector('.co-card[data-role="unknown"]'),
+      lineStats: (function () {
+        var lines = Array.prototype.map.call(document.querySelectorAll('.co-ev-t'), function (n) { return n.textContent.replace(/\s+/g, ' ').length })
+        var bodies = Array.prototype.map.call(document.querySelectorAll('.co-ev-b'), function (n) { return n.textContent.replace(/\s+/g, ' ').length })
+        return {
+          events: lines.length,
+          maxLine: lines.length ? Math.max.apply(null, lines) : 0,
+          maxBody: bodies.length ? Math.max.apply(null, bodies) : 0,
+          overLine: lines.filter(function (n) { return n > 100 }).length,
+          overBody: bodies.filter(function (n) { return n > 72 }).length
+        }
+      })(),
+      redacted: (document.getElementById('host').innerHTML.match(/‹已隐藏›/g) || []).length,
+      secretHits: (document.getElementById('host').innerHTML.match(/sk-live|ghp_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|AKIA[0-9A-Z]{16}|Bearer\s+[A-Za-z0-9._~+/=-]{8,}/g) || []).length,
+      strips: Array.prototype.map.call(document.querySelectorAll('.co-strip'), function (s) {
+        return {
+          strip: s.getAttribute('data-strip') || 'window',
+          show: s.getAttribute('data-show') === 'true',
+          tone: s.getAttribute('data-tone'),
+          text: s.textContent.replace(/\s+/g, ' ').trim().slice(0, 80)
+        }
+      })
+    }
+  }
+
+  /* ── 7. 每个场景的断言 ── */
+  async function runScenario(name) {
+    var errors = []
+    var originalError = console.error
+    console.error = function () {
+      errors.push(Array.prototype.map.call(arguments, function (a) { return a && a.message ? a.message : String(a) }).join(' '))
+      return originalError.apply(console, arguments)
+    }
+
+    var sc = scene(name)
+    mount(sc)
+    await wait(80)
+
+    var report = { scenario: name, firstPaint: readings() }
+
+    /* 宽度先量：crash 场景后面会点「重试」，先把兜底卡在五档宽度下的读数拿到 */
+    report.retain = Object.assign({}, retainStats)
+    report.retainCollapsed = Object.assign({}, retainStats)
+    report.widths = []
+    var widths = [600, 480, 380, 340, 300]
+    for (var i = 0; i < widths.length; i += 1) {
+      frame.style.width = widths[i] + 'px'
+      /* 强制一次布局，容器查询与滚动宽都要按新宽度重算 */
+      void frame.offsetWidth
+      await wait(30)
+      var p = panelEl()
+      report.widths.push({
+        width: widths[i],
+        state: p ? p.getAttribute('data-state') : null,
+        scrollWidth: p ? p.scrollWidth : null,
+        clientWidth: p ? p.clientWidth : null,
+        fits: !!(p && p.scrollWidth === p.clientWidth)
+      })
+    }
+    frame.style.width = '340px'
+
+    if (name === 'crash') {
+      report.consoleErrorCount = errors.length
+      report.consoleErrors = errors.slice()
+      /* 修数据后点「重试」：边界必须能复位，面板恢复 */
+      world.sessions[sc.rootId].source._set(windowOf(rootRound({ gate: 'PASS' }), false))
+      world.list._set({ ids: Object.keys(world.byId), byId: Object.assign({}, world.byId, { 'session-root': { id: 'session-root', running: false, projectionValues: { agentPreset: 'cto-office' } } }) })
+      var retry = document.querySelector('.co-retry')
+      if (retry) retry.click()
+      await wait(120)
+      var after = readings()
+      report.afterRetry = { state: after.state, cards: after.cards, fallback: after.fallback, runs: after.runs }
+      report.retryRecovered = after.state === 'ended' || after.state === 'live'
+    }
+
+    if (name === 'retain-fail') {
+      /* 失败时必须是 fault strip（可点），不是「这轮还没有事件」的空态 */
+      report.faultStrip = readings().strips.filter(function (x) { return x.strip === 'retain-fault' })
+      report.emptyHintBeforeRetry = readings().emptyHint
+      report.retainAttemptsBeforeRetry = world.rootRetainAttempts
+      var stripBtn = document.querySelector('[data-strip="retain-fault"]')
+      if (stripBtn) stripBtn.click()
+      await wait(140)
+      var recovered = readings()
+      report.afterRetainRetry = {
+        state: recovered.state,
+        cards: recovered.cards,
+        emptyHint: recovered.emptyHint,
+        faultStrips: recovered.strips.filter(function (x) { return x.strip === 'retain-fault' && x.show }).length,
+        attempts: world.rootRetainAttempts,
+        retain: Object.assign({}, retainStats)
+      }
+      report.retainFailRecovered = recovered.state === 'live' && recovered.cards === 7 && report.afterRetainRetry.faultStrips === 0
+    }
+
+    if (name === 'preset-fault') {
+      /* 解析失败：卡片不许消失，要出 fault strip 并把子会话挂到「未识别」行 */
+      await wait(140)
+      var pf = readings()
+      report.presetFaultStrip = pf.strips.filter(function (x) { return x.strip === 'preset-fault' })
+      report.unknownCard = pf.unknownCard
+      /* 折叠态摘要要在点开之前读：展开后 .co-last 不再渲染 */
+      var pfLast = document.querySelector('.co-card[data-role="unknown"] .co-last')
+      report.presetFaultUnknownText = pfLast ? pfLast.textContent : null
+      var unknownHead = document.querySelector('.co-card[data-role="unknown"] .co-card-head')
+      if (unknownHead) unknownHead.click()
+      await wait(80)
+      var unknownRun = document.querySelector('.co-card[data-role="unknown"] .co-run')
+      report.unknownExpanded = {
+        expanded: !!document.querySelector('.co-card[data-role="unknown"][data-expanded="true"]'),
+        runs: document.querySelectorAll('.co-card[data-role="unknown"] .co-run').length,
+        events: document.querySelectorAll('.co-card[data-role="unknown"] .co-ev').length,
+        runText: unknownRun ? unknownRun.textContent : null,
+        title: document.querySelector('.co-card[data-role="unknown"] .co-role') ? document.querySelector('.co-card[data-role="unknown"] .co-role').textContent : null
+      }
+      /* 子会话必须仍在展开列表里（一行 run，带它的 label 或 id）；它没订阅上事件是因为 ready 被拒，
+       * 这一行要把原因写出来，而不是让这张卡凭空消失。 */
+      report.presetFaultOk = !!report.presetFaultUnknownText &&
+        report.presetFaultUnknownText.indexOf('未识别（agentPreset 投影不可用）') === 0 &&
+        pf.cards === 8 && !!(report.presetFaultStrip[0] && report.presetFaultStrip[0].show) &&
+        !!report.unknownCard && report.unknownExpanded.runs === 1 &&
+        !!report.unknownExpanded.runText &&
+        (report.unknownExpanded.runText.indexOf('不明岗位') >= 0 || report.unknownExpanded.runText.indexOf('child-mystery') >= 0) &&
+        report.unknownExpanded.runText.indexOf('子会话读取失败') >= 0 &&
+        document.querySelector('.co-card[data-role="unknown"]').textContent.indexOf('agentPreset 投影不可用') >= 0
+    }
+
+    if (name === 'empty-window') {
+      /* 无事件时摘要要写成「0 道闸 · 2 待判定」，两张闸门卡 chip 都是「待判定」 */
+      var ew = readings()
+      report.emptyWindowSummary = ew.summary
+      report.emptyWindowChips = ew.gateChips
+      report.emptyWindowOk = ew.summary.indexOf('0 道闸') >= 0 && ew.summary.indexOf('2 待判定') >= 0 &&
+        ew.gateChips.length === 2 && ew.gateChips.every(function (c) { return c.indexOf('待判定') >= 0 })
+    }
+
+    if (name === 'offbook-preset') {
+      /* 不在册 preset：卡片不许消失；未识别卡要带上这个子会话，retain 总量与子会话数一致
+       * （根 1 + 每个子会话 1，一个都不许漏挂） */
+      await wait(160)
+      var ob = readings()
+      report.offbookStrip = ob.strips.filter(function (x) { return x.strip === 'preset-fault' && x.show })
+      report.offbookUnknownCard = ob.unknownCard
+      report.offbookCards = ob.cards
+      report.offbookRetain = Object.assign({}, retainStats)
+      report.offbookChildCount = sc.children.length
+      report.offbookUnknownText = (ob.lastTexts.filter(function (x) { return x.role === 'unknown' })[0] || {}).last || ''
+      report.offbookOk = ob.cards === 8 && ob.unknownCard &&
+        !!report.offbookStrip[0] && report.offbookStrip[0].text.indexOf('未知角色 liangshen') >= 0 &&
+        retainStats.total === sc.children.length + 1 &&
+        report.offbookUnknownText.indexOf('未知角色 liangshen') >= 0
+    }
+
+    if (name === 'retain-peak') {
+      /* 3 角色 × 6 轮：折叠态每角色只挂最近 3 张子会话，峰值理论值 1 + 3×3 = 10 */
+      await wait(220)
+      report.retainPeakCollapsed = Object.assign({}, retainStats)
+      report.retainPeakTheoretical = 10
+      report.retainPeakOk = retainStats.peak === 10
+      report.cardRows = readings().cardRows
+    }
+
+    if (name === 'privacy') {
+      /* 展开根卡，让 300 字 prompt 与带凭据的 bash 调用都进 DOM 再量 */
+      var rootHead = document.querySelector('.co-card[data-role="cto-office"] .co-card-head')
+      if (rootHead) rootHead.click()
+      await wait(100)
+      var pr = readings()
+      report.privacy = {
+        secretHits: pr.secretHits,
+        redacted: pr.redacted,
+        maxLine: pr.lineStats.maxLine,
+        maxBody: pr.lineStats.maxBody,
+        overLine: pr.lineStats.overLine,
+        overBody: pr.lineStats.overBody,
+        events: pr.lineStats.events
+      }
+      report.privacyOk = pr.secretHits === 0 && pr.redacted > 0 && pr.lineStats.maxLine <= 100 && pr.lineStats.maxBody <= 72 && pr.lineStats.events >= 5
+    }
+
+    if (name === 'partial') {
+      /* 单轮场景（评审只有 1 个子会话）：不带轮次号 */
+      var singleText = (readings().lastTexts.filter(function (x) { return x.role === 'cto-reviewer' })[0] || {}).last || ''
+      report.singleRoundText = singleText
+      report.singleRoundOk = singleText.indexOf('第 ') < 0 && singleText.indexOf('终审') >= 0
+      var fallbackReading = readings()
+      report.elapsedDegraded = fallbackReading.elapsed
+      report.partialFaultStrip = fallbackReading.strips.filter(function (x) { return x.strip === 'fault' && x.show })
+      report.partialOk = fallbackReading.state === 'live' && fallbackReading.elapsed === '—' &&
+        report.partialFaultStrip.length === 1 && fallbackReading.cards === 7
+    }
+
+    if (name === 'live' || name === 'ended') {
+      /* 折叠卡摘要必须来自最近一轮；多轮要在前缀里带轮次，单轮不带 */
+      var collapsedTexts = readings().lastTexts
+      report.collapsedTexts = collapsedTexts
+      var reviewText = (collapsedTexts.filter(function (x) { return x.role === 'cto-reviewer' })[0] || {}).last || ''
+      report.reviewSummaryText = reviewText
+      /* live 与 ended 的评审都跑了 4 轮 → 必须带「第 4 轮」且正文来自末轮（终审） */
+      report.roundPrefixOk = reviewText.indexOf('第 4 轮') >= 0 && reviewText.indexOf('终审') >= 0
+      /* 折叠态：评审卡 4 个子会话只挂最近 3 张，闸门仍然要露出来 */
+      report.collapsedGateChanges = readings().collapsedGateChanges
+      /* 展开评审：点卡片头 */
+      var reviewCard = document.querySelector('.co-card[data-role="cto-reviewer"] .co-card-head')
+      if (reviewCard) reviewCard.click()
+      await wait(80)
+      var expandedReading = readings()
+      report.expandedReview = {
+        expanded: !!document.querySelector('.co-card[data-role="cto-reviewer"][data-expanded="true"]'),
+        runs: document.querySelectorAll('.co-card[data-role="cto-reviewer"] .co-run').length,
+        more: expandedReading.more
+      }
+      /* Esc 收起并把焦点送回卡片头 */
+      var panel = panelEl()
+      var head = document.querySelector('.co-card[data-role="cto-reviewer"] .co-card-head')
+      if (head) head.focus()
+      if (panel) panel.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+      await wait(60)
+      var active = document.activeElement
+      report.escape = {
+        focusIsHead: !!(active && active.classList && active.classList.contains('co-card-head')),
+        collapsed: !!document.querySelector('.co-card[data-role="cto-reviewer"][data-expanded="false"]')
+      }
+      /* → 键在步进条上移动并把焦点交给下一步 */
+      var firstStep = document.querySelector('[data-step-id]')
+      if (firstStep) {
+        firstStep.focus()
+        firstStep.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }))
+        await wait(60)
+      }
+      var stepActive = document.activeElement
+      report.arrowRight = { activeStepId: stepActive ? stepActive.getAttribute('data-step-id') : null }
+      report.gateChips = readings().gateChips
+      var ctoCard = document.querySelector('.co-card[data-role="cto-office"]')
+      report.rootCard = {
+        hasChip: !!document.querySelector('.co-card[data-role="cto-office"] .co-gate'),
+        dataGate: ctoCard ? ctoCard.getAttribute('data-gate') : null
+      }
+      report.gateChipsOk = report.gateChips.length === 2 && !report.rootCard.hasChip && !!report.rootCard.dataGate
+      report.retainExpanded = Object.assign({}, retainStats)
+    }
+
+    if (name === 'live') {
+      /* 桩的契约自证：release 后读 binding 必须抛、ready 必须被拒（照 service.ts 的 ClientSessionReference）。
+       * 用独立 world，并把计数复原，免得污染 live 的 retain 读数。 */
+      var savedCounters = Object.assign({}, retainStats)
+      var probeWorld = buildWorld(scene('live'))
+      /* 还在打开中的引用：release 后 ready 必须被拒（真源 release() 会 readiness.reject） */
+      probeWorld.sessions['probe-pending'] = { source: source(windowOf([], false)), pendingReady: true }
+      var probeCtx = buildCtx(probeWorld)
+      var probeRef = probeCtx.sessions.retain('session-root', { source: 'cto-office/liveboard' })
+      var bindingThrew = ''
+      probeRef.release()
+      try { void probeRef.binding.sessionId } catch (error) { bindingThrew = error.message }
+      var pendingRef = probeCtx.sessions.retain('probe-pending', { source: 'cto-office/liveboard' })
+      pendingRef.release()
+      report.stubContract = {
+        bindingAfterReleaseThrows: bindingThrew,
+        readyAfterRelease: await probeRef.ready.then(function () { return 'resolved' }, function (error) { return 'rejected: ' + error.message }),
+        readyAfterPendingRelease: await pendingRef.ready.then(function () { return 'resolved' }, function (error) { return 'rejected: ' + error.message })
+      }
+      report.stubContractOk = bindingThrew.indexOf('is released') >= 0 &&
+        report.stubContract.readyAfterRelease === 'resolved' &&
+        report.stubContract.readyAfterPendingRelease.indexOf('rejected') === 0
+      retainStats = savedCounters
+    }
+
+    report.retainFinal = Object.assign({}, retainStats)
+    console.error = originalError
+    report.consoleErrorCount = errors.length
+    if (!report.consoleErrors) report.consoleErrors = errors.slice()
+    report.tabDefinition = tabDefinition ? {
+      id: tabDefinition.id,
+      kind: tabDefinition.kind,
+      title: typeof tabDefinition.title === 'function' ? tabDefinition.title() : null,
+      guide: Array.isArray(tabDefinition.guide) ? tabDefinition.guide.map(function (g) {
+        return {
+          id: g.id || null,
+          order: g.order == null ? null : g.order,
+          title: typeof g.title === 'function' ? g.title() : g.title,
+          description: typeof g.description === 'function' ? g.description() : g.description
+        }
+      }) : null
+    } : null
+    report.requires = LB.requires.slice(requireMark)
+    report.moduleInject = moduleInject
+    return report
+  }
+
+  var moduleInject = null
+
+  async function runAll() {
+    log('handoff.id=' + handoff.id + ' sheets=' + JSON.stringify(sheetNames))
+    log('module.inject=' + JSON.stringify(moduleInject))
+    var reports = []
+    var names = ['live', 'ended', 'empty-window', 'window-partial', 'retain-fail', 'partial', 'preset-fault', 'offbook-preset', 'retain-peak', 'privacy', 'crash']
+    for (var i = 0; i < names.length; i += 1) {
+      var report = await runScenario(names[i])
+      reports.push(report)
+      log(JSON.stringify(report))
+      document.querySelectorAll('.pv-bar button').forEach(function (btn) {
+        btn.setAttribute('aria-pressed', btn.getAttribute('data-scenario') === names[i] ? 'true' : 'false')
+      })
+    }
+    LB.reports = reports
+    function byName(n) { return reports.filter(function (r) { return r.scenario === n })[0] }
+    log('SUMMARY ' + JSON.stringify({
+      cards: reports.map(function (r) { return r.scenario + ':' + r.firstPaint.cards }),
+      states: reports.map(function (r) { return r.scenario + ':' + r.firstPaint.state }),
+      crashFallback: byName('crash').firstPaint.fallback,
+      crashErrorText: byName('crash').firstPaint.fallbackText,
+      crashConsoleErrors: byName('crash').consoleErrorCount,
+      retryRecovered: byName('crash').retryRecovered === true,
+      retainPeakCollapsed: reports.map(function (r) { return r.scenario + ':' + r.retainCollapsed.peak }),
+      retainPeakExpanded: byName('live').retainExpanded.peak,
+      widthFits: byName('live').widths.map(function (w) { return w.fits }),
+      statuses: byName('live').firstPaint.cardRows.map(function (r) { return r.role + ':' + r.status + '/gate=' + r.gate }),
+      gateChips: byName('live').gateChips,
+      summaryLine: byName('live').firstPaint.summary,
+      emptyWindow: {
+        state: byName('empty-window').firstPaint.state,
+        emptyHint: byName('empty-window').firstPaint.emptyHint,
+        strips: byName('empty-window').firstPaint.strips.filter(function (x) { return x.show }).map(function (x) { return x.strip }),
+        cards: byName('empty-window').firstPaint.cards
+      },
+      windowPartial: {
+        state: byName('window-partial').firstPaint.state,
+        emptyHint: byName('window-partial').firstPaint.emptyHint,
+        strips: byName('window-partial').firstPaint.strips.filter(function (x) { return x.show }).map(function (x) { return x.strip })
+      },
+      retainFail: {
+        state: byName('retain-fail').firstPaint.state,
+        strips: byName('retain-fail').firstPaint.strips.filter(function (x) { return x.show }).map(function (x) { return x.strip }),
+        emptyHint: byName('retain-fail').emptyHintBeforeRetry,
+        afterRetry: byName('retain-fail').afterRetainRetry,
+        recovered: byName('retain-fail').retainFailRecovered
+      },
+      presetFault: {
+        state: byName('preset-fault').firstPaint.state,
+        cards: byName('preset-fault').firstPaint.cards,
+        strips: byName('preset-fault').presetFaultStrip,
+        unknownCard: byName('preset-fault').unknownCard,
+        unknownExpanded: byName('preset-fault').unknownExpanded,
+        unknownText: byName('preset-fault').presetFaultUnknownText,
+        ok: byName('preset-fault').presetFaultOk
+      },
+      rootCard: byName('live').rootCard,
+      gateChipsOk: byName('live').gateChipsOk,
+      rootCard: byName('live').rootCard,
+      offbook: {
+        cards: byName('offbook-preset').offbookCards,
+        unknownText: byName('offbook-preset').offbookUnknownText,
+        unknownCard: byName('offbook-preset').offbookUnknownCard,
+        strip: byName('offbook-preset').offbookStrip,
+        retain: byName('offbook-preset').offbookRetain,
+        childCount: byName('offbook-preset').offbookChildCount,
+        ok: byName('offbook-preset').offbookOk
+      },
+      retainPeak: {
+        collapsed: byName('retain-peak').retainPeakCollapsed,
+        theoretical: byName('retain-peak').retainPeakTheoretical,
+        ok: byName('retain-peak').retainPeakOk
+      },
+      stubContract: byName('live').stubContract,
+      stubContractOk: byName('live').stubContractOk,
+      privacy: byName('privacy').privacy,
+      privacyOk: byName('privacy').privacyOk,
+      partialState: byName('partial').firstPaint.state,
+      partialElapsed: byName('partial').elapsedDegraded,
+      partialOk: byName('partial').partialOk,
+      partialFaultStrip: byName('partial').partialFaultStrip,
+      collapsedSummary: {
+        live: byName('live').reviewSummaryText,
+        ended: byName('ended').reviewSummaryText,
+        singleRound: byName('partial').singleRoundText,
+        ok: byName('live').roundPrefixOk && byName('ended').roundPrefixOk && byName('partial').singleRoundOk
+      },
+      emptyWindowSummary: byName('empty-window').emptyWindowSummary,
+      emptyWindowChips: byName('empty-window').emptyWindowChips,
+      emptyWindowOk: byName('empty-window').emptyWindowOk
+    }))
+    return reports
+  }
+
+  /* factory 只在 mount 时调，module.inject 需要提前拿到：先试一次只取 inject */
+  try {
+    var probe = handoff.factory(requireStub)
+    moduleInject = probe.inject
+  } catch (error) {
+    moduleInject = 'factory-error: ' + error.message
+  }
+
+  /* 只挂载不跑交互：crash 场景需要停在兜底卡上才截得到图（runScenario 最后会点「重试」把它救回来） */
+  async function mountOnly(name) {
+    mount(scene(name))
+    await wait(120)
+    return readings()
+  }
+
+  LB.runAll = runAll
+  LB.run = runScenario
+  LB.mountOnly = mountOnly
+  LB.readings = readings
+
+  document.querySelectorAll('.pv-bar button[data-scenario]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      document.querySelectorAll('.pv-bar button[data-scenario]').forEach(function (b) { b.setAttribute('aria-pressed', 'false') })
+      btn.setAttribute('aria-pressed', 'true')
+      runScenario(btn.getAttribute('data-scenario')).then(function (report) { log(JSON.stringify(report)) })
+    })
+  })
+  document.getElementById('pv-all').addEventListener('click', function () { runAll() })
+
+  LB.ready = true
+  runAll()
+})()
+</script>
+</body>
+</html>
