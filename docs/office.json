@@ -1,6 +1,6 @@
 {
   "schema": "cto-office/office-data@2",
-  "bundle": "@chy/dsh-cto-office@0.1.0",
+  "bundle": "@chy/dsh-cto-office@0.2.0",
   "provenance": {
     "sourceFile": "cordis.patch.yml",
     "sha256": "97c7728095772e8acad28fa0e3dbaf59cdb522e4771e47454bc949bddcbe920e",

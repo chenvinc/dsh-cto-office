@@ -10,7 +10,6 @@ import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const BUNDLE = '@chy/dsh-cto-office@0.1.0';
 const SCHEMA = 'cto-office/office-data@2';
 const SCRIPT_ID = 'sync-office-data@2';
 
@@ -104,6 +103,24 @@ function fail(code, message) {
   process.stderr.write('E_' + code + ': ' + message + '\n');
   process.exit(2);
 }
+
+// bundle 名的真源是 package.json。以前这里手抄一份版本号，改包版本要记得两处
+// （跟 facts 手抄五处是同一个毛病）；读不到就直接 E_PKG 退出，不许静默用旧值。
+function readBundleId() {
+  let pkg;
+  try {
+    pkg = JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
+  } catch (error) {
+    fail('PKG', '读不到 package.json，无法确定 bundle 版本：' + (error && error.message ? error.message : error));
+  }
+  if (!pkg || typeof pkg.name !== 'string' || !pkg.name ||
+      typeof pkg.version !== 'string' || !pkg.version) {
+    fail('PKG', 'package.json 缺少 name 或 version，无法拼出 bundle 名');
+  }
+  return pkg.name + '@' + pkg.version;
+}
+
+const BUNDLE = readBundleId();
 
 function parseArgs(argv) {
   const opts = { check: false, stdout: false, quiet: false, patch: DEFAULTS.patch,
