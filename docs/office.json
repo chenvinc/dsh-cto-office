@@ -1,0 +1,554 @@
+{
+  "schema": "cto-office/office-data@1",
+  "bundle": "@chy/dsh-cto-office@0.1.0",
+  "provenance": {
+    "sourceFile": "cordis.patch.yml",
+    "sha256": "a0ba8d54db413e4222d2ef8c6fd89cabeea17a449233656db0650333f802fb26",
+    "sha256Short": "a0ba8d54",
+    "lines": 644,
+    "script": "sync-office-data@2",
+    "verify": "generated-from-patch"
+  },
+  "counts": {
+    "presets": 7,
+    "root": 1,
+    "posts": 6,
+    "dispatchEdges": 6,
+    "allowedPresets": 6
+  },
+  "presets": [
+    {
+      "id": "cto-office",
+      "name": "CTO 办公室",
+      "order": 20,
+      "description": "你当 CTO：接需求、拆卡、派工给六个岗位、验结果、带证据汇报。不亲自写实现。",
+      "isRoot": true,
+      "canDispatch": true,
+      "tools": {
+        "read": true,
+        "write": true,
+        "edit": true,
+        "applyPatch": false,
+        "bash": true,
+        "pwsh": true,
+        "search": true,
+        "jobs": true,
+        "todo": true,
+        "web": true,
+        "askUser": true,
+        "present": true,
+        "goal": true,
+        "office": true,
+        "subagent": true,
+        "skill": true,
+        "fsSearch": true
+      },
+      "delegation": {
+        "mounted": true,
+        "defaultPreset": "cto-builder",
+        "interrupt": false,
+        "allowedAgentPresets": [
+          "cto-architect",
+          "cto-builder",
+          "cto-reviewer",
+          "cto-qa",
+          "cto-ux",
+          "cto-product"
+        ]
+      },
+      "sourceRefs": [
+        18,
+        40,
+        43,
+        46,
+        49,
+        50,
+        54,
+        56,
+        75,
+        79,
+        100,
+        123,
+        125,
+        129,
+        134,
+        136
+      ],
+      "toolLines": {
+        "read": 46,
+        "applyPatch": 49,
+        "bash": 40,
+        "pwsh": 43,
+        "search": 50,
+        "jobs": 54,
+        "todo": 125,
+        "web": 129,
+        "askUser": 123,
+        "present": 134,
+        "goal": 79,
+        "office": 136,
+        "skill": 75,
+        "fsSearch": 56
+      }
+    },
+    {
+      "id": "cto-architect",
+      "name": "CTO 办公室 · 架构师",
+      "order": 21,
+      "description": "只读调研，产出方案、接口契约、拆卡建议与风险清单；不改文件、不写实现。",
+      "isRoot": false,
+      "canDispatch": false,
+      "tools": {
+        "read": true,
+        "write": false,
+        "edit": false,
+        "applyPatch": false,
+        "bash": true,
+        "pwsh": true,
+        "search": true,
+        "jobs": false,
+        "todo": true,
+        "web": true,
+        "askUser": false,
+        "present": false,
+        "goal": false,
+        "office": false,
+        "subagent": false,
+        "skill": true,
+        "fsSearch": true
+      },
+      "delegation": {
+        "mounted": false,
+        "defaultPreset": null,
+        "interrupt": null,
+        "allowedAgentPresets": []
+      },
+      "sourceRefs": [
+        141,
+        162,
+        165,
+        168,
+        171,
+        172,
+        173,
+        174,
+        178,
+        197,
+        199,
+        203
+      ],
+      "toolLines": {
+        "read": 168,
+        "write": 171,
+        "edit": 172,
+        "applyPatch": 173,
+        "bash": 162,
+        "pwsh": 165,
+        "search": 174,
+        "todo": 199,
+        "web": 203,
+        "skill": 197,
+        "fsSearch": 178
+      }
+    },
+    {
+      "id": "cto-builder",
+      "name": "CTO 办公室 · 工程师",
+      "order": 22,
+      "description": "按契约实现、小步自测、交可验证证据；不改契约与验收标准，不审自己的活。",
+      "isRoot": false,
+      "canDispatch": false,
+      "tools": {
+        "read": true,
+        "write": true,
+        "edit": true,
+        "applyPatch": false,
+        "bash": true,
+        "pwsh": true,
+        "search": true,
+        "jobs": true,
+        "todo": true,
+        "web": false,
+        "askUser": false,
+        "present": false,
+        "goal": false,
+        "office": false,
+        "subagent": false,
+        "skill": true,
+        "fsSearch": true
+      },
+      "delegation": {
+        "mounted": false,
+        "defaultPreset": null,
+        "interrupt": null,
+        "allowedAgentPresets": []
+      },
+      "sourceRefs": [
+        228,
+        249,
+        252,
+        255,
+        258,
+        259,
+        263,
+        265,
+        284,
+        286
+      ],
+      "toolLines": {
+        "read": 255,
+        "applyPatch": 258,
+        "bash": 249,
+        "pwsh": 252,
+        "search": 259,
+        "jobs": 263,
+        "todo": 286,
+        "skill": 284,
+        "fsSearch": 265
+      }
+    },
+    {
+      "id": "cto-reviewer",
+      "name": "CTO 办公室 · 评审",
+      "order": 23,
+      "description": "只读审 diff 与契约一致性，跑测试验证，给出 PASS/CHANGES 与逐条证据；不替实现者改代码。",
+      "isRoot": false,
+      "canDispatch": false,
+      "tools": {
+        "read": true,
+        "write": false,
+        "edit": false,
+        "applyPatch": false,
+        "bash": true,
+        "pwsh": true,
+        "search": true,
+        "jobs": false,
+        "todo": true,
+        "web": false,
+        "askUser": false,
+        "present": false,
+        "goal": false,
+        "office": false,
+        "subagent": false,
+        "skill": true,
+        "fsSearch": true
+      },
+      "delegation": {
+        "mounted": false,
+        "defaultPreset": null,
+        "interrupt": null,
+        "allowedAgentPresets": []
+      },
+      "sourceRefs": [
+        310,
+        331,
+        334,
+        337,
+        340,
+        341,
+        342,
+        343,
+        347,
+        366,
+        368
+      ],
+      "toolLines": {
+        "read": 337,
+        "write": 340,
+        "edit": 341,
+        "applyPatch": 342,
+        "bash": 331,
+        "pwsh": 334,
+        "search": 343,
+        "todo": 368,
+        "skill": 366,
+        "fsSearch": 347
+      }
+    },
+    {
+      "id": "cto-qa",
+      "name": "CTO 办公室 · QA",
+      "order": 24,
+      "description": "按验收标准逐条实测，输出 PASS/FAIL 与每条的实测证据；不评审代码风格、不改代码。",
+      "isRoot": false,
+      "canDispatch": false,
+      "tools": {
+        "read": true,
+        "write": false,
+        "edit": false,
+        "applyPatch": false,
+        "bash": true,
+        "pwsh": true,
+        "search": true,
+        "jobs": false,
+        "todo": true,
+        "web": false,
+        "askUser": false,
+        "present": false,
+        "goal": false,
+        "office": false,
+        "subagent": false,
+        "skill": true,
+        "fsSearch": true
+      },
+      "delegation": {
+        "mounted": false,
+        "defaultPreset": null,
+        "interrupt": null,
+        "allowedAgentPresets": []
+      },
+      "sourceRefs": [
+        392,
+        413,
+        416,
+        419,
+        422,
+        423,
+        424,
+        425,
+        429,
+        448,
+        450
+      ],
+      "toolLines": {
+        "read": 419,
+        "write": 422,
+        "edit": 423,
+        "applyPatch": 424,
+        "bash": 413,
+        "pwsh": 416,
+        "search": 425,
+        "todo": 450,
+        "skill": 448,
+        "fsSearch": 429
+      }
+    },
+    {
+      "id": "cto-ux",
+      "name": "CTO 办公室 · UI/UX 设计",
+      "order": 25,
+      "description": "只读调研界面与使用路径，产出摩擦点清单、交互规格与可粘贴的 HTML/CSS 片段；不落盘、不碰代码。",
+      "isRoot": false,
+      "canDispatch": false,
+      "tools": {
+        "read": true,
+        "write": false,
+        "edit": false,
+        "applyPatch": false,
+        "bash": true,
+        "pwsh": true,
+        "search": true,
+        "jobs": false,
+        "todo": true,
+        "web": true,
+        "askUser": false,
+        "present": false,
+        "goal": false,
+        "office": false,
+        "subagent": false,
+        "skill": true,
+        "fsSearch": true
+      },
+      "delegation": {
+        "mounted": false,
+        "defaultPreset": null,
+        "interrupt": null,
+        "allowedAgentPresets": []
+      },
+      "sourceRefs": [
+        474,
+        495,
+        498,
+        501,
+        504,
+        505,
+        506,
+        507,
+        511,
+        530,
+        532,
+        536
+      ],
+      "toolLines": {
+        "read": 501,
+        "write": 504,
+        "edit": 505,
+        "applyPatch": 506,
+        "bash": 495,
+        "pwsh": 498,
+        "search": 507,
+        "todo": 532,
+        "web": 536,
+        "skill": 530,
+        "fsSearch": 511
+      }
+    },
+    {
+      "id": "cto-product",
+      "name": "CTO 办公室 · 业务",
+      "order": 26,
+      "description": "从真实使用场景出发，把模糊需求变成需求假设、成功指标与可测验收标准；不替用户排优先级。",
+      "isRoot": false,
+      "canDispatch": false,
+      "tools": {
+        "read": true,
+        "write": false,
+        "edit": false,
+        "applyPatch": false,
+        "bash": true,
+        "pwsh": true,
+        "search": true,
+        "jobs": false,
+        "todo": true,
+        "web": true,
+        "askUser": false,
+        "present": false,
+        "goal": false,
+        "office": false,
+        "subagent": false,
+        "skill": true,
+        "fsSearch": true
+      },
+      "delegation": {
+        "mounted": false,
+        "defaultPreset": null,
+        "interrupt": null,
+        "allowedAgentPresets": []
+      },
+      "sourceRefs": [
+        561,
+        582,
+        585,
+        588,
+        591,
+        592,
+        593,
+        594,
+        598,
+        617,
+        619,
+        623
+      ],
+      "toolLines": {
+        "read": 588,
+        "write": 591,
+        "edit": 592,
+        "applyPatch": 593,
+        "bash": 582,
+        "pwsh": 585,
+        "search": 594,
+        "todo": 619,
+        "web": 623,
+        "skill": 617,
+        "fsSearch": 598
+      }
+    }
+  ],
+  "lineHints": {
+    "tools": {
+      "read": [
+        46,
+        168,
+        255,
+        337,
+        419,
+        501,
+        588
+      ],
+      "write": [
+        171,
+        340,
+        422,
+        504,
+        591
+      ],
+      "edit": [
+        172,
+        341,
+        423,
+        505,
+        592
+      ],
+      "applyPatch": [
+        49,
+        173,
+        258,
+        342,
+        424,
+        506,
+        593
+      ],
+      "bash": [
+        40,
+        162,
+        249,
+        331,
+        413,
+        495,
+        582
+      ],
+      "pwsh": [
+        43,
+        165,
+        252,
+        334,
+        416,
+        498,
+        585
+      ],
+      "search": [
+        50,
+        174,
+        259,
+        343,
+        425,
+        507,
+        594
+      ],
+      "jobs": [
+        54,
+        263
+      ],
+      "todo": [
+        125,
+        199,
+        286,
+        368,
+        450,
+        532,
+        619
+      ],
+      "askUser": [
+        123
+      ],
+      "present": [
+        134
+      ],
+      "goal": [
+        79
+      ],
+      "office": [
+        136
+      ],
+      "subagent": []
+    },
+    "disabledTools": {
+      "apply_patch": [
+        49,
+        173,
+        258,
+        342,
+        424,
+        506,
+        593
+      ],
+      "subagent_fork": [
+        17,
+        98
+      ],
+      "workflow": [
+        98
+      ]
+    }
+  }
+}

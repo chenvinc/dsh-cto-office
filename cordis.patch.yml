@@ -14,6 +14,7 @@
 
 - insert:
     # ── CTO（根）──────────────────────────────────────────────────────────
+# 设计意图（确证）：根不挂 subagent_fork 与 workflow——前者让子代理继承 CTO 全量工具、绕过岗位边界，后者没有角色槽位。
     - id: preset-cto-office
       name: '@deepseek-ai/dsh-agent-preset'
       config:
@@ -136,6 +137,7 @@
             name: '@deepseek-ai/dsh-tool-office'
 
     # ── 架构师 ────────────────────────────────────────────────────────────
+# 设计意图（推断，作者未记录）：挂 tool-web（选型要查仓库外资料）、不挂 tool-jobs（调研不该转后台失联）；不挂 write/edit 属只读岗。
     - id: preset-cto-architect
       name: '@deepseek-ai/dsh-agent-preset'
       config:
@@ -222,6 +224,7 @@
                   tailChars: 1024
 
     # ── 工程师 ────────────────────────────────────────────────────────────
+# 设计意图（推断，作者未记录）：挂 tool-jobs（长构建/长测试转后台）、不挂 tool-web（实现不需要联网）；可写靠 tool-fs 缺省 write/edit=true，patch 里不写 true。
     - id: preset-cto-builder
       name: '@deepseek-ai/dsh-agent-preset'
       config:
@@ -303,6 +306,7 @@
                   tailChars: 1024
 
     # ── 评审 ──────────────────────────────────────────────────────────────
+# 设计意图（推断，作者未记录）：不挂 tool-web——闸门结论必须能由仓库内 diff 与本机测试复跑，外部网页会让证据不可复现。
     - id: preset-cto-reviewer
       name: '@deepseek-ai/dsh-agent-preset'
       config:
@@ -384,6 +388,7 @@
                   tailChars: 1024
 
     # ── QA ────────────────────────────────────────────────────────────────
+# 设计意图（推断，作者未记录）：不挂 tool-web、不挂 tool-jobs——验收只认本机当场实测，逐条实测不该转后台。
     - id: preset-cto-qa
       name: '@deepseek-ai/dsh-agent-preset'
       config:
@@ -465,6 +470,7 @@
                   tailChars: 1024
 
     # ── UI/UX 设计 ────────────────────────────────────────────────────────
+# 设计意图（推断，作者未记录）：挂 tool-web（看现成界面与规范）、不挂 tool-jobs（产出是文本规格）。
     - id: preset-cto-ux
       name: '@deepseek-ai/dsh-agent-preset'
       config:
@@ -551,6 +557,7 @@
                   tailChars: 1024
 
     # ── 业务 / 产品 ───────────────────────────────────────────────────────
+# 设计意图（推断，作者未记录）：挂 tool-web——业务输入常在仓库之外（竞品、用户场景）。
     - id: preset-cto-product
       name: '@deepseek-ai/dsh-agent-preset'
       config:

@@ -9,6 +9,9 @@
 - **工具边界是真的**：只读岗的 `tool-fs` 根本没挂 `write`/`edit`，写文件时工具不存在，不是靠提示词求它别写。
 - **共享任务板**：bundle 里把 `agent-team` 行的 `defaultEnabled` 设为 `true`，这个 profile 的新会话默认带团队任务板（会话菜单可逐会话关闭）。
 
+> 角色架构全景（可交互）：[docs/architecture.html](docs/architecture.html)
+> 页面里的工具矩阵与行号由 `npm run check` 对 `cordis.patch.yml` 校验；改了 patch 就跑 `npm run sync`。
+
 ## 成员表
 
 | 预设 | 岗位 | 工具 | 拿手活 |

@@ -1,0 +1,2539 @@
+<!doctype html>
+<html lang="zh-CN" data-selected="cto-office">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>CTO 办公室 · 角色架构全景</title>
+<style>
+*,*::before,*::after{box-sizing:border-box}
+:root{
+  color-scheme:dark;
+  --bg:#0a0d11;
+  --bg-soft:#0e1318;
+  --panel:#11171e;
+  --panel-2:#0c1218;
+  --line:#232c37;
+  --line-2:#33404e;
+  --text:#e8eef4;
+  --muted:#94a3b2;
+  --dim:#6f8090;
+  --accent:#5ac8fa;
+  --accent-soft:rgba(90,200,250,.12);
+  --accent-line:rgba(90,200,250,.38);
+  --ok:#7fe0a8;
+  --warn:#f2c66d;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono","Courier New",monospace;
+  --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+}
+html{scroll-behavior:smooth}
+body{
+  margin:0;color:var(--text);font:15px/1.65 var(--sans);background:
+    radial-gradient(1200px 600px at 82% -8%, rgba(90,200,250,.07), transparent 62%),
+    radial-gradient(900px 520px at -5% 32%, rgba(90,200,250,.04), transparent 60%),
+    var(--bg);
+  -webkit-font-smoothing:antialiased;
+}
+svg{display:block}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+code,.mono{font-family:var(--mono);font-size:.86em}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+.skip{position:absolute;left:12px;top:-64px;z-index:120;background:var(--accent);color:#04121a;padding:8px 12px;border-radius:6px;font-weight:600}
+.skip:focus{top:12px}
+.wrap{width:100%;max-width:1600px;margin:0 auto;padding:0 24px}
+.section,.panel,.workbench{scroll-margin-top:72px}
+
+/* ---- masthead ---- */
+.masthead{padding:56px 0 36px;border-bottom:1px solid var(--line)}
+.eyebrow{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:0 0 16px;font:11px/1.4 var(--mono);letter-spacing:.15em;text-transform:uppercase;color:var(--dim)}
+.eyebrow .sep{width:18px;height:1px;background:var(--line-2)}
+.masthead h1{margin:0 0 16px;font-size:clamp(30px,3.7vw,52px);line-height:1.12;letter-spacing:-.02em;font-weight:650}
+.masthead h1 em{font-style:normal;color:var(--accent)}
+.lede{max-width:78ch;margin:0 0 24px;color:var(--muted);font-size:15px}
+.meta{display:flex;flex-wrap:wrap;gap:8px}
+.meta .stat{display:inline-flex;align-items:center;gap:8px;padding:5px 10px;border:1px solid var(--line);border-radius:7px;background:#0d1319;font-size:12px;color:var(--muted)}
+.meta .stat b{color:var(--text);font-weight:600;font-family:var(--mono);font-size:11.5px}
+.meta .stat .patch{margin-left:2px}
+
+/* ---- nav ---- */
+.toc{position:sticky;top:0;z-index:50;background:rgba(10,13,17,.9);backdrop-filter:blur(12px);border-bottom:1px solid var(--line)}
+.toc .wrap{display:flex;gap:4px;align-items:center;overflow-x:auto;padding:7px 24px;scrollbar-width:none}
+.toc .wrap::-webkit-scrollbar{display:none}
+.toc a{padding:6px 11px;border:1px solid transparent;border-radius:7px;color:var(--muted);font-size:13px;white-space:nowrap}
+.toc a:hover{color:var(--text);text-decoration:none}
+.toc a[aria-current]{color:var(--accent);border-color:var(--accent-line);background:var(--accent-soft)}
+
+/* ---- section frame ---- */
+.section{padding:44px 0 6px}
+.section-head{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin:0 0 16px}
+.section-head .idx{font:11px/1 var(--mono);letter-spacing:.16em;color:var(--accent)}
+.section-head h2{margin:0;font-size:22px;letter-spacing:-.01em}
+.section-head p{margin:0;color:var(--muted);font-size:13px}
+.panel{background:linear-gradient(180deg,#121821,#0f141a);border:1px solid var(--line);border-radius:12px;padding:16px;min-width:0}
+.panel-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:6px}
+.panel-head h2{margin:0;font-size:18px;letter-spacing:-.01em}
+.panel-head .kicker{margin:0 0 4px;font:10px/1 var(--mono);letter-spacing:.14em;color:var(--accent);text-transform:uppercase}
+.panel-sub{margin:0 0 12px;color:var(--muted);font-size:12.5px}
+.foot-note{margin:10px 0 0;color:var(--dim);font-size:11.5px;line-height:1.55}
+.note{margin:14px 0 0;padding:10px 12px;border:1px dashed var(--line-2);border-radius:8px;background:#0c1218;color:var(--muted);font-size:12.5px}
+.note strong{color:var(--text)}
+
+/* ---- patch badges ---- */
+.patch{display:inline-flex;align-items:center;gap:4px;padding:1px 6px;border:1px solid var(--line);border-radius:4px;background:#0b1015;color:var(--dim);font-family:var(--mono);font-size:10.5px;line-height:1.6;white-space:nowrap;letter-spacing:-.01em}
+
+/* ---- quick read ---- */
+.quick{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.quick-card{position:relative;padding:16px 16px 14px;border:1px solid var(--line);border-radius:12px;background:linear-gradient(180deg,#131a22,#0d1319);min-width:0}
+.quick-card .big{font:600 30px/1 var(--mono);color:var(--accent);letter-spacing:-.02em}
+.quick-card .unit{margin-left:6px;font-size:11.5px;color:var(--dim)}
+.quick-card h3{margin:10px 0 6px;font-size:14px}
+.quick-card p{margin:0 0 12px;color:var(--muted);font-size:12.5px;line-height:1.6}
+.quick-card .patch{position:relative;margin-top:2px}
+
+/* ---- workbench ---- */
+.workbench{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;align-items:start;padding-top:44px}
+#sec-matrix{grid-column:1/-1}
+#sec-topology,#sec-detail,#sec-matrix{min-width:0}
+
+/* ---- topology ---- */
+.star{position:relative;aspect-ratio:1000/1150;margin-top:4px}
+.star svg.wires{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:1}
+.edge{fill:none;stroke:#2b3743;stroke-width:1;vector-effect:non-scaling-stroke;transition:stroke .18s,opacity .18s}
+.edge.dispatch{opacity:.85}
+.edge.return{stroke-dasharray:4 4;opacity:.6}
+.role-card{position:absolute;z-index:2;transform:translate(-50%,-50%);display:flex;flex-direction:column;gap:1px;width:128px;padding:6px 8px;text-align:left;background-color:#10161d;background-image:linear-gradient(180deg,#161d25,#0e141a);border:1px solid var(--line);border-radius:9px;transition:border-color .18s,box-shadow .18s,background .18s}
+.role-card:hover{border-color:var(--line-2)}
+.role-card[data-root="true"]{width:136px;border-color:var(--accent-line);background-color:#101922;background-image:linear-gradient(180deg,rgba(90,200,250,.13),rgba(90,200,250,.02))}
+.node-top{display:flex;align-items:center;gap:6px;min-width:0}
+.role-card .icon{width:14px;height:14px;flex:none;color:var(--accent)}
+.node-role{font-size:11.5px;line-height:1.3;font-weight:600;letter-spacing:.02em;white-space:nowrap}
+.node-order{margin-left:auto;font:9.5px/1 var(--mono);color:var(--dim)}
+.node-name{font-size:10.5px;line-height:1.25;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.node-chip{font-size:9.5px;line-height:1.3;color:var(--dim);border-top:1px dashed var(--line);padding-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.role-card .patch{font-size:8.5px;padding:0 3px;align-self:flex-start;max-width:100%;overflow:hidden;text-overflow:ellipsis}
+.legend{display:flex;flex-wrap:wrap;align-items:center;gap:6px 14px;margin-top:12px;padding-top:12px;border-top:1px solid var(--line);font-size:11.5px;color:var(--muted)}
+.legend .lg{display:inline-block;width:22px;height:0;border-top:2px solid var(--line-2);vertical-align:middle;margin-right:6px}
+.legend .lg.return{border-top-style:dashed}
+.legend-strong{color:var(--accent);margin-left:auto;white-space:nowrap}
+.icon{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+
+/* ---- detail ---- */
+#sec-detail{display:flex;flex-direction:column;gap:12px}
+.detail-head .kicker{margin:0 0 4px;font:10px/1 var(--mono);letter-spacing:.14em;color:var(--accent);text-transform:uppercase}
+.detail-head h2{margin:0;font-size:20px;letter-spacing:-.01em}
+.detail-summary{margin:8px 0 0;color:var(--muted);font-size:13px;line-height:1.6}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.chip{display:inline-flex;align-items:center;gap:4px;padding:2px 7px;border:1px solid var(--line);border-radius:999px;background:#0c1218;color:var(--muted);font:10.5px/1.5 var(--mono)}
+.chip-root{color:var(--accent);border-color:var(--accent-line);background:var(--accent-soft)}
+.chip-gate{color:var(--warn);border-color:rgba(242,198,109,.4);background:rgba(242,198,109,.08)}
+.chip-ro{color:#9ad7ff;border-color:rgba(90,200,250,.3)}
+.detail-rows{margin:0;display:flex;flex-direction:column}
+.detail-rows .row{display:grid;grid-template-columns:84px minmax(0,1fr);gap:10px;padding:10px 0;border-top:1px solid var(--line)}
+.detail-rows dt{font:10.5px/1.7 var(--mono);letter-spacing:.06em;color:var(--accent);padding-top:1px}
+.detail-rows dd{margin:0;font-size:13px;line-height:1.65;color:#cfdae4;min-width:0}
+.detail-rows ul{margin:0;padding-left:16px;display:flex;flex-direction:column;gap:4px}
+.detail-rows .row.boundary{background:rgba(90,200,250,.045);border-radius:6px;padding:10px 8px;border-top-color:transparent}
+.detail-rows .row.boundary dt{color:#9ad7ff}
+.detail-empty{padding:18px 4px;color:var(--muted);font-size:13px}
+.detail-empty .empty-mark{margin:0 0 6px;font:11px/1 var(--mono);letter-spacing:.14em;color:var(--accent)}
+.detail-empty .dim,.dim{color:var(--dim)}
+.refs{display:flex;flex-wrap:wrap;align-items:center;gap:4px;padding-top:10px;border-top:1px solid var(--line);font-size:10.5px;color:var(--dim)}
+.refs .label{margin-right:4px;letter-spacing:.06em}
+
+/* ---- matrix ---- */
+.matrix-wrap{position:relative;overflow:hidden;min-width:0;border:1px solid var(--line);border-radius:8px;background:#0c1116}
+.matrix-scroll{overflow-x:auto;overscroll-behavior-x:contain;border:0;border-radius:8px;background:#0c1116;scrollbar-width:thin}
+.matrix{width:100%;min-width:648px;border-collapse:separate;border-spacing:0;font-size:12px;table-layout:fixed}
+.matrix th,.matrix td{padding:7px 3px;text-align:center;border-bottom:1px solid var(--line)}
+.matrix thead th{font-weight:500;font-size:10.5px;line-height:1.3;color:var(--muted);background:#0b1016;position:sticky;top:0;z-index:1;white-space:nowrap}
+.matrix thead th:first-child{text-align:left;padding-left:9px}
+.lbl-short{display:none}
+@media (max-width:899px){.lbl-full{display:none}.lbl-short{display:inline}}
+.matrix tbody tr:last-child th,.matrix tbody tr:last-child td{border-bottom:0}
+.matrix .rowhead{width:104px;min-width:104px;text-align:left;padding:8px 8px;position:sticky;left:0;z-index:2;background:#10161d;border-right:1px solid var(--line);font-size:11.5px;font-weight:500;color:#cfdae4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.matrix .rowhead .row-icon{width:12px;height:12px;display:inline-block;vertical-align:-2px;margin-right:5px;color:var(--accent)}
+.matrix td.yes{color:var(--accent)}
+.matrix td.no{color:#3d4a57}
+.matrix td .mk{font-size:13px;line-height:1}
+.matrix-add{display:flex;justify-content:space-between;gap:8px;margin-top:8px;font-size:10.5px;color:var(--dim)}
+.matrix-hint{display:none}
+[data-overflow="true"] .matrix-hint{display:block;margin:8px 0 0;font-size:11px;color:var(--dim)}
+.matrix-fade{position:absolute;top:0;right:0;bottom:0;width:38px;border-radius:0 7px 7px 0;background:linear-gradient(90deg,rgba(12,17,22,0),rgba(12,17,22,.92));pointer-events:none;transition:opacity .2s}
+.matrix-wrap[data-at-end="true"] .matrix-fade{opacity:0}
+.tool-notes{margin-top:12px;border-top:1px solid var(--line);padding-top:10px}
+.tool-notes summary{cursor:pointer;font-size:11.5px;color:var(--muted);list-style-position:inside}
+.tool-notes summary:hover{color:var(--text)}
+.tool-notes dl{margin:10px 0 0;display:grid;grid-template-columns:84px minmax(0,1fr);gap:6px 10px;font-size:11px}
+.tool-notes dt{font-family:var(--mono);color:var(--accent);font-size:10.5px}
+.tool-notes dd{margin:0;color:var(--muted);line-height:1.55}
+
+/* ---- stepper ---- */
+.step-track-wrap{position:relative;padding-bottom:40px}
+.step-track{list-style:none;display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px;margin:0;padding:0}
+.step-loop{position:absolute;left:0;right:0;bottom:0;width:100%;height:40px;pointer-events:none;overflow:visible}
+.loop-path{fill:none;stroke:var(--accent-line);stroke-width:1.6;vector-effect:non-scaling-stroke;stroke-dasharray:5 4}
+.loop-arrow{fill:none;stroke:var(--accent-line);stroke-width:1.6;vector-effect:non-scaling-stroke;stroke-linecap:round;stroke-linejoin:round}
+@media (prefers-reduced-motion: no-preference){.loop-path{animation:loopdash 18s linear infinite}}
+@keyframes loopdash{to{stroke-dashoffset:-180}}
+.step-loop-note{margin:-8px 0 14px;font-size:11px;color:var(--dim)}
+.back-chip{display:inline-flex;align-items:center;gap:6px;margin:0 8px 0 0;padding:3px 10px;border:1px solid var(--accent-line);border-radius:999px;background:var(--accent-soft);color:var(--accent);font-size:11.5px;cursor:pointer;vertical-align:1px}
+.back-chip:hover{border-color:var(--accent);background:rgba(90,200,250,.16)}
+.tools-line{font-family:var(--mono);font-size:11.5px;color:#cfdae4}
+.tools-off{color:var(--dim)}
+.chip-preset code{font-family:var(--mono);font-size:10.5px;color:var(--accent)}
+.step-track button{display:flex;align-items:center;gap:6px;width:100%;padding:8px;border:1px solid var(--line);border-radius:8px;background:#0c1218;color:var(--muted);font-size:12px;transition:border-color .18s,color .18s,background .18s;text-align:left}
+.step-track button:hover{border-color:var(--line-2);color:var(--text)}
+.step-track button[aria-current="step"]{color:var(--accent);border-color:var(--accent-line);background:var(--accent-soft)}
+.step-track .dot-num{font:10px/1 var(--mono);color:var(--dim)}
+.step-track button[aria-current="step"] .dot-num{color:var(--accent)}
+.step-body{border-top:1px solid var(--line);padding-top:14px}
+.step-body h3{margin:0 0 4px;font-size:16px}
+.step-body .step-goal{margin:0 0 10px;color:var(--muted);font-size:12.5px}
+.step-rows{margin:0;display:grid;grid-template-columns:88px minmax(0,1fr);gap:0}
+.step-rows dt{padding:7px 0;border-top:1px solid var(--line);font:10.5px/1.7 var(--mono);color:var(--accent);letter-spacing:.06em}
+.step-rows dd{margin:0;padding:7px 0;border-top:1px solid var(--line);font-size:12.5px;color:#cfdae4;line-height:1.6}
+.stepper-bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}
+.step-count{margin-left:auto;font:11px/1 var(--mono);color:var(--dim)}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:7px 12px;border:1px solid var(--line-2);border-radius:7px;background:#121922;color:var(--text);font-size:12.5px;transition:border-color .18s,color .18s,background .18s}
+.btn:hover:not(:disabled){border-color:var(--accent-line);color:var(--accent)}
+.btn:disabled{opacity:.38;cursor:not-allowed}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#04121a;font-weight:600}
+.btn.primary:hover:not(:disabled){filter:brightness(1.08);color:#04121a}
+.btn.ghost{background:transparent;color:var(--muted)}
+
+/* ---- simulation ---- */
+.sim{display:grid;grid-template-columns:minmax(0,340px) minmax(0,1fr);gap:16px;align-items:start}
+.scenario-list{display:flex;flex-direction:column;gap:8px;min-width:0}
+.scenario{display:flex;flex-direction:column;gap:4px;width:100%;padding:11px 12px;text-align:left;border:1px solid var(--line);border-radius:9px;background:#0f151c;transition:border-color .18s,background .18s}
+.scenario:hover{border-color:var(--line-2)}
+.scenario[aria-pressed="true"]{border-color:var(--accent-line);background:var(--accent-soft)}
+.scenario-title{display:flex;align-items:center;gap:6px;font-size:13px;font-weight:600}
+.badge-infer{font:9.5px/1.5 var(--mono);color:var(--warn);border:1px solid rgba(242,198,109,.42);border-radius:999px;padding:0 5px}
+.scenario-when{font-size:11.5px;color:var(--muted);line-height:1.5}
+.scenario-meta{font:10px/1.4 var(--mono);color:var(--dim)}
+.sim-stage{display:flex;flex-direction:column;gap:12px}
+.stage-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.stage-head h3{margin:0;font-size:16px}
+.phase{font:10.5px/1 var(--mono);padding:4px 8px;border:1px solid var(--line);border-radius:999px;color:var(--muted);white-space:nowrap}
+.phase[data-phase="armed"]{color:var(--warn);border-color:rgba(242,198,109,.4)}
+.phase[data-phase="running"]{color:var(--accent);border-color:var(--accent-line);background:var(--accent-soft)}
+.phase[data-phase="done"]{color:var(--ok);border-color:rgba(127,224,168,.4);background:rgba(127,224,168,.08)}
+.stage-counts{margin:0;font:11.5px/1.6 var(--mono);color:var(--muted)}
+.sim-chips{display:flex;flex-wrap:wrap;gap:6px;min-height:26px}
+.sim-chip{display:inline-flex;align-items:center;gap:5px;padding:3px 8px;border:1px solid var(--line);border-radius:999px;color:var(--dim);font-size:11.5px;opacity:.5;transition:opacity .2s,color .2s,border-color .2s,background .2s}
+.sim-chip .icon{width:12px;height:12px}
+.sim-chip.is-lit{opacity:1;color:var(--accent);border-color:var(--accent-line);background:var(--accent-soft)}
+.sim-log{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px;min-height:96px;font-size:12px}
+.sim-log li{padding:6px 9px;border-left:2px solid var(--line-2);border-radius:0 6px 6px 0;background:#0c1218;color:#cfdae4;line-height:1.55}
+.sim-log li:last-child{border-left-color:var(--accent)}
+.sim-log li.log-conclusion{border-left-color:var(--ok);background:rgba(127,224,168,.06)}
+.sim-actions{display:flex;flex-wrap:wrap;gap:8px;padding-top:10px;border-top:1px solid var(--line)}
+.stage-basis{margin:0;font-size:11px;color:var(--dim);line-height:1.6}
+.stage-basis .patch{margin-left:4px}
+
+/* ---- rules ---- */
+.rules-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;align-items:start}
+.rules-grid h3{margin:0 0 10px;font-size:14px}
+.rules-grid h3:not(:first-child){margin-top:18px;padding-top:14px;border-top:1px solid var(--line)}
+.rule-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.rule-list li{display:grid;grid-template-columns:22px minmax(0,1fr);gap:8px;font-size:12.5px;color:#cfdae4;line-height:1.6}
+.rule-no{font:10px/1.7 var(--mono);color:var(--accent)}
+.rule-list.plain li{grid-template-columns:14px minmax(0,1fr);color:var(--muted)}
+.rule-list.plain li .bullet{color:var(--dim);font-family:var(--mono);font-size:11px;line-height:1.75}
+.rule-list.plain li.never .bullet{color:var(--warn)}
+.rule-list .patch{margin-top:2px}
+.rule-list.plain li .patch{margin-left:4px}
+
+/* ---- footer / notice ---- */
+.footer{margin-top:44px;padding:22px 0 34px;border-top:1px solid var(--line);color:var(--muted);font-size:12px}
+.footer p{margin:0 0 6px}
+.footer code{color:#cfdae4}
+.notice{position:fixed;left:50%;bottom:18px;z-index:80;transform:translateX(-50%);display:flex;align-items:center;gap:12px;max-width:min(700px,calc(100vw - 32px));padding:10px 14px;border:1px solid var(--accent-line);border-radius:9px;background:#0d1a22;color:var(--text);box-shadow:0 12px 44px rgba(0,0,0,.55);font-size:12.5px}
+.notice[hidden]{display:none}
+.notice button{flex:none;padding:3px 8px;border:1px solid var(--line-2);border-radius:6px;color:var(--muted);font-size:11.5px}
+.notice button:hover{color:var(--text);border-color:var(--accent-line)}
+
+/* ---- responsive ---- */
+@media (min-width:1280px){
+  .star{max-width:560px;margin-left:auto;margin-right:auto}
+}
+@media (max-width:1279px){
+  .workbench{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+  #sec-matrix{grid-column:1/-1}
+}
+@media (max-width:1099px){
+  .quick{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .rules-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media (max-width:899px){
+  .workbench{grid-template-columns:minmax(0,1fr)}
+  #sec-matrix{grid-column:auto}
+  .role-card{width:104px;padding:5px 7px}
+  .role-card[data-root="true"]{width:112px}
+  .node-role{font-size:11px}
+  .node-name{font-size:10.5px}
+  .node-chip{font-size:9px}
+  .role-card .patch{font-size:8px}
+  .role-card .patch .pf{display:none}
+  .toc a{padding:6px 5px;font-size:11px}
+  .sim{grid-template-columns:minmax(0,1fr)}
+  .step-track{grid-template-columns:repeat(6,minmax(0,1fr));gap:4px}
+}
+@media (max-width:520px){
+  .step-track button{padding:5px 3px;gap:3px;font-size:10.5px}
+  .step-track .dot-num{font-size:8.5px}
+}
+@media (max-width:700px){
+  .wrap{padding:0 16px}
+  .toc .wrap{padding:7px 16px}
+  .masthead{padding:40px 0 28px}
+  .quick{grid-template-columns:1fr}
+  .rules-grid{grid-template-columns:1fr}
+  .step-rows{grid-template-columns:72px minmax(0,1fr)}
+  .step-count{margin-left:0;width:100%;text-align:right}
+}
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  *,*::before,*::after{transition:none!important;animation:none!important}
+}
+</style>
+</head>
+<body>
+<a class="skip" href="#main">跳到主内容</a>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <symbol id="i-hub" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="M12 8.8V4.5M12 15.2v4.3M8.8 12H4.5M15.2 12h4.3M9.7 9.7 6.8 6.8M14.3 14.3l2.9 2.9M9.7 14.3l-2.9 2.9M14.3 9.7l2.9-2.9"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/><path d="M12 15v2"/></symbol>
+  <symbol id="i-write" viewBox="0 0 24 24"><path d="M4 20h4L18 10l-4-4L4 16v4Z"/><path d="M13.5 6.5l4 4"/><path d="M4 20h16"/></symbol>
+  <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M4 12h16"/><ellipse cx="12" cy="12" rx="3.4" ry="8"/></symbol>
+  <symbol id="i-gate" viewBox="0 0 24 24"><path d="M4 20V9l8-5 8 5v11"/><path d="M4 20h16"/><path d="M9 20v-6h6v6"/><path d="M12 9v2"/></symbol>
+  <symbol id="i-terminal" viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="15" rx="2"/><path d="M7 9.5l3 2.5-3 2.5"/><path d="M12.5 15h4.5"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></symbol>
+</svg>
+
+<header class="masthead">
+  <div class="wrap">
+    <p class="eyebrow"><span id="eyebrow-bundle">@chy/dsh-cto-office</span><span class="sep"></span><span>角色架构全景</span><span class="sep"></span><span>interactive · single file</span></p>
+    <h1>一个 CTO，六个岗位，<br><em>七条预设</em>的派工链路。</h1>
+    <p class="lede">把「谁派给谁、谁能写、卡在哪里过闸」画成一张可点的图。拓扑、矩阵、六步流程与场景预演全部读同一份内联数据；每个断言旁边的行号都来自 <code>cordis.patch.yml</code>。</p>
+    <div class="meta" id="meta-row"></div>
+  </div>
+</header>
+
+<nav class="toc" aria-label="区块导航">
+  <div class="wrap">
+    <a href="#sec-read">速读</a>
+    <a href="#sec-flow">六步流程</a>
+    <a href="#sec-topology">角色拓扑</a>
+    <a href="#sec-matrix">工具边界</a>
+    <a href="#sec-sim">派工模拟</a>
+    <a href="#sec-rules">铁律与边界</a>
+  </div>
+</nav>
+
+<main id="main">
+<noscript><p class="wrap" style="margin:24px auto;color:#f2b45a">本页的角色、矩阵、六步流程与派工预演全部由内联 JSON 即时渲染；请启用 JavaScript 后刷新。</p></noscript>
+  <section id="sec-read" class="section wrap" aria-labelledby="read-h">
+    <div class="section-head"><span class="idx">01</span><h2 id="read-h">30 秒速读</h2><p>先看这四件事，再往下钻。</p></div>
+    <div class="quick" id="quick-cards"></div>
+  </section>
+
+  <section id="sec-flow" class="section wrap" aria-labelledby="flow-h">
+    <div class="section-head"><span class="idx">02</span><h2 id="flow-h">六步流程</h2><p>从澄清到结算；聚焦步进器后按 ← / → 逐步看。</p></div>
+    <div class="panel stepper" id="stepper" tabindex="0" role="group" aria-label="六步流程步进器">
+      <div class="step-track-wrap">
+        <ol class="step-track" id="step-track"></ol>
+        <svg class="step-loop" id="step-loop" viewBox="0 0 600 40" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+          <path class="loop-path" d=""></path>
+          <path class="loop-arrow" d=""></path>
+        </svg>
+      </div>
+      <p class="step-loop-note">注意：第 5 步判 CHANGES / FAIL 会回到第 3 步重开派工卡。</p>
+      <div class="step-body" id="step-body"></div>
+      <div class="stepper-bar">
+        <button type="button" class="btn" id="step-prev">← 上一步</button>
+        <button type="button" class="btn" id="step-next">下一步 →</button>
+        <button type="button" class="btn ghost" id="step-reset">重置</button>
+        <span class="step-count mono" id="step-count"></span>
+      </div>
+    </div>
+    <p class="note" id="gate-note"></p>
+  </section>
+
+  <div class="workbench wrap">
+    <section id="sec-topology" class="panel" aria-labelledby="topo-h">
+      <div class="panel-head">
+        <div><p class="kicker">03 · 拓扑</p><h2 id="topo-h">角色拓扑</h2></div>
+        <span class="patch" id="topo-ref"></span>
+      </div>
+      <p class="panel-sub">星型：唯一 hub 是 CTO。实线派工、虚线回执，岗位之间没有任何连线。</p>
+      <div class="star" id="star"></div>
+      <div class="legend" aria-label="图例">
+        <span><i class="lg" aria-hidden="true"></i>实线 · 派工（subagent(agent_preset)）</span>
+        <span><i class="lg return" aria-hidden="true"></i>虚线 · 回执</span>
+        <span class="legend-strong">唯一 hub：CTO</span>
+      </div>
+    </section>
+
+    <aside id="sec-detail" class="panel" aria-labelledby="detail-title">
+      <div class="detail-head">
+        <p class="kicker">岗位详情</p>
+        <h2 id="detail-title">岗位详情</h2>
+        <div class="chips" id="detail-chips"></div>
+        <p class="detail-summary" id="detail-summary"></p>
+      </div>
+      <div id="detail-body"></div>
+    </aside>
+
+    <section id="sec-matrix" class="panel" aria-labelledby="matrix-h">
+      <div class="panel-head">
+        <div><p class="kicker">04 · 工具</p><h2 id="matrix-h">工具边界矩阵</h2></div>
+        <span class="patch" id="matrix-ref"></span>
+      </div>
+      <p class="panel-sub">14 列：岗位 + 13 项工具能力，按判别力排序（写 / 改 / 联网 / 跑命令 / 派工在前；7/7 全有的读 / 搜 / 待办在后）；「跑命令」合并 bash / pwsh。✓ = 挂载，— = 未挂载。</p>
+      <div class="matrix-wrap" id="matrix-wrap">
+        <div class="matrix-scroll" id="matrix-scroll" tabindex="0" role="region" aria-label="工具边界矩阵：7 个岗位 × 14 列；窄屏可横向滚动，首列固定">
+          <table class="matrix" id="matrix"></table>
+        </div>
+        <div class="matrix-fade" aria-hidden="true"></div>
+      </div>
+      <p class="matrix-hint">← 左右滑动 · 首列固定 →</p>
+      <div class="matrix-add"><span>✓ 挂载 · — 未挂载</span><span id="matrix-count"></span></div>
+      <p class="foot-note" id="matrix-foot"></p>
+      <details class="tool-notes">
+        <summary>工具语义与行号（来自内联 JSON toolSemantics）</summary>
+        <dl id="tool-notes"></dl>
+      </details>
+    </section>
+  </div>
+
+  <section id="sec-sim" class="section wrap" aria-labelledby="sim-h">
+    <div class="section-head"><span class="idx">05</span><h2 id="sim-h">场景派工模拟</h2><p>idle → armed → running → done；只演示派工顺序，不产生真实执行。</p></div>
+    <div class="sim">
+      <div class="scenario-list" id="scenario-list" role="group" aria-label="派工场景"></div>
+      <div class="sim-stage panel">
+        <div class="stage-head">
+          <h3 id="stage-title">待机</h3>
+          <span class="phase" id="stage-phase" data-phase="idle">待机</span>
+        </div>
+        <p class="stage-counts" id="stage-counts">从左侧选一个场景开始。</p>
+        <div class="sim-chips" id="sim-chips"></div>
+        <ol class="sim-log" id="sim-log"></ol>
+        <p class="stage-basis" id="stage-basis"></p>
+        <div class="sim-actions">
+          <button type="button" class="btn primary" id="sim-start" disabled>开始预演</button>
+          <button type="button" class="btn" id="sim-stop" disabled>停止</button>
+          <button type="button" class="btn ghost" id="sim-replay" disabled>重播</button>
+        </div>
+        <p class="foot-note">「推断」场景表示章程未列、依据评审规程推得；一次预演只点亮被派到的岗位。</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="sec-rules" class="section wrap" aria-labelledby="rules-h">
+    <div class="section-head"><span class="idx">06</span><h2 id="rules-h">铁律与边界</h2><p>章程七条 + 已知限制。边界靠工具缺失与纪律，不靠沙盒。</p></div>
+    <div class="rules-grid">
+      <div class="panel"><h3>铁律（章程）</h3><ol class="rule-list" id="rules"></ol></div>
+      <div class="panel"><h3>已知边界</h3><ul class="rule-list plain" id="limits"></ul><h3>平台事实</h3><ul class="rule-list plain" id="platform"></ul></div>
+      <div class="panel"><h3>不会发生的事</h3><ul class="rule-list plain" id="never"></ul><p class="foot-note" id="never-ref"></p></div>
+    </div>
+  </section>
+</main>
+
+<footer class="footer">
+  <div class="wrap">
+    <p id="footer-meta"></p>
+    <p id="footer-prov" class="dim"></p>
+    <p class="dim">本页零网络请求、零外部资源；交互数据全部来自上方内联 JSON，行号由该 JSON 渲染，不手写。</p>
+    <p class="dim">以 bundle 内 <code>cordis.patch.yml</code> 为准。</p>
+  </div>
+</footer>
+
+<div class="notice" id="notice" role="status" hidden>
+  <span id="notice-text"></span>
+  <button type="button" id="notice-close">知道了</button>
+</div>
+<div class="sr-only" aria-live="polite" id="live"></div>
+<noscript><p style="padding:16px 24px;color:#f2c66d">本页需要 JavaScript 才能渲染拓扑、矩阵与模拟；数据本身已内联在 HTML 中。</p></noscript>
+
+<!-- office-data:start -->
+<script type="application/json" id="office-data">
+{
+  "schema": "cto-office/office-data@1",
+  "bundle": "@chy/dsh-cto-office@0.1.0",
+  "provenance": {
+    "sourceFile": "cordis.patch.yml",
+    "sha256": "a0ba8d54db413e4222d2ef8c6fd89cabeea17a449233656db0650333f802fb26",
+    "sha256Short": "a0ba8d54",
+    "lines": 644,
+    "script": "sync-office-data@2",
+    "verify": "generated-from-patch"
+  },
+  "counts": {
+    "presets": 7,
+    "root": 1,
+    "posts": 6,
+    "dispatchEdges": 6,
+    "allowedPresets": 6
+  },
+  "presets": [
+    {
+      "id": "cto-office",
+      "name": "CTO 办公室",
+      "order": 20,
+      "description": "你当 CTO：接需求、拆卡、派工给六个岗位、验结果、带证据汇报。不亲自写实现。",
+      "isRoot": true,
+      "canDispatch": true,
+      "tools": {
+        "read": true,
+        "write": true,
+        "edit": true,
+        "applyPatch": false,
+        "bash": true,
+        "pwsh": true,
+        "search": true,
+        "jobs": true,
+        "todo": true,
+        "web": true,
+        "askUser": true,
+        "present": true,
+        "goal": true,
+        "office": true,
+        "subagent": true,
+        "skill": true,
+        "fsSearch": true
+      },
+      "delegation": {
+        "mounted": true,
+        "defaultPreset": "cto-builder",
+        "interrupt": false,
+        "allowedAgentPresets": [
+          "cto-architect",
+          "cto-builder",
+          "cto-reviewer",
+          "cto-qa",
+          "cto-ux",
+          "cto-product"
+        ]
+      },
+      "sourceRefs": [
+        18,
+        40,
+        43,
+        46,
+        49,
+        50,
+        54,
+        56,
+        75,
+        79,
+        100,
+        123,
+        125,
+        129,
+        134,
+        136
+      ],
+      "toolLines": {
+        "read": 46,
+        "applyPatch": 49,
+        "bash": 40,
+        "pwsh": 43,
+        "search": 50,
+        "jobs": 54,
+        "todo": 125,
+        "web": 129,
+        "askUser": 123,
+        "present": 134,
+        "goal": 79,
+        "office": 136,
+        "skill": 75,
+        "fsSearch": 56
+      }
+    },
+    {
+      "id": "cto-architect",
+      "name": "CTO 办公室 · 架构师",
+      "order": 21,
+      "description": "只读调研，产出方案、接口契约、拆卡建议与风险清单；不改文件、不写实现。",
+      "isRoot": false,
+      "canDispatch": false,
+      "tools": {
+        "read": true,
+        "write": false,
+        "edit": false,
+        "applyPatch": false,
+        "bash": true,
+        "pwsh": true,
+        "search": true,
+        "jobs": false,
+        "todo": true,
+        "web": true,
+        "askUser": false,
+        "present": false,
+        "goal": false,
+        "office": false,
+        "subagent": false,
+        "skill": true,
+        "fsSearch": true
+      },
+      "delegation": {
+        "mounted": false,
+        "defaultPreset": null,
+        "interrupt": null,
+        "allowedAgentPresets": []
+      },
+      "sourceRefs": [
+        141,
+        162,
+        165,
+        168,
+        171,
+        172,
+        173,
+        174,
+        178,
+        197,
+        199,
+        203
+      ],
+      "toolLines": {
+        "read": 168,
+        "write": 171,
+        "edit": 172,
+        "applyPatch": 173,
+        "bash": 162,
+        "pwsh": 165,
+        "search": 174,
+        "todo": 199,
+        "web": 203,
+        "skill": 197,
+        "fsSearch": 178
+      }
+    },
+    {
+      "id": "cto-builder",
+      "name": "CTO 办公室 · 工程师",
+      "order": 22,
+      "description": "按契约实现、小步自测、交可验证证据；不改契约与验收标准，不审自己的活。",
+      "isRoot": false,
+      "canDispatch": false,
+      "tools": {
+        "read": true,
+        "write": true,
+        "edit": true,
+        "applyPatch": false,
+        "bash": true,
+        "pwsh": true,
+        "search": true,
+        "jobs": true,
+        "todo": true,
+        "web": false,
+        "askUser": false,
+        "present": false,
+        "goal": false,
+        "office": false,
+        "subagent": false,
+        "skill": true,
+        "fsSearch": true
+      },
+      "delegation": {
+        "mounted": false,
+        "defaultPreset": null,
+        "interrupt": null,
+        "allowedAgentPresets": []
+      },
+      "sourceRefs": [
+        228,
+        249,
+        252,
+        255,
+        258,
+        259,
+        263,
+        265,
+        284,
+        286
+      ],
+      "toolLines": {
+        "read": 255,
+        "applyPatch": 258,
+        "bash": 249,
+        "pwsh": 252,
+        "search": 259,
+        "jobs": 263,
+        "todo": 286,
+        "skill": 284,
+        "fsSearch": 265
+      }
+    },
+    {
+      "id": "cto-reviewer",
+      "name": "CTO 办公室 · 评审",
+      "order": 23,
+      "description": "只读审 diff 与契约一致性，跑测试验证，给出 PASS/CHANGES 与逐条证据；不替实现者改代码。",
+      "isRoot": false,
+      "canDispatch": false,
+      "tools": {
+        "read": true,
+        "write": false,
+        "edit": false,
+        "applyPatch": false,
+        "bash": true,
+        "pwsh": true,
+        "search": true,
+        "jobs": false,
+        "todo": true,
+        "web": false,
+        "askUser": false,
+        "present": false,
+        "goal": false,
+        "office": false,
+        "subagent": false,
+        "skill": true,
+        "fsSearch": true
+      },
+      "delegation": {
+        "mounted": false,
+        "defaultPreset": null,
+        "interrupt": null,
+        "allowedAgentPresets": []
+      },
+      "sourceRefs": [
+        310,
+        331,
+        334,
+        337,
+        340,
+        341,
+        342,
+        343,
+        347,
+        366,
+        368
+      ],
+      "toolLines": {
+        "read": 337,
+        "write": 340,
+        "edit": 341,
+        "applyPatch": 342,
+        "bash": 331,
+        "pwsh": 334,
+        "search": 343,
+        "todo": 368,
+        "skill": 366,
+        "fsSearch": 347
+      }
+    },
+    {
+      "id": "cto-qa",
+      "name": "CTO 办公室 · QA",
+      "order": 24,
+      "description": "按验收标准逐条实测，输出 PASS/FAIL 与每条的实测证据；不评审代码风格、不改代码。",
+      "isRoot": false,
+      "canDispatch": false,
+      "tools": {
+        "read": true,
+        "write": false,
+        "edit": false,
+        "applyPatch": false,
+        "bash": true,
+        "pwsh": true,
+        "search": true,
+        "jobs": false,
+        "todo": true,
+        "web": false,
+        "askUser": false,
+        "present": false,
+        "goal": false,
+        "office": false,
+        "subagent": false,
+        "skill": true,
+        "fsSearch": true
+      },
+      "delegation": {
+        "mounted": false,
+        "defaultPreset": null,
+        "interrupt": null,
+        "allowedAgentPresets": []
+      },
+      "sourceRefs": [
+        392,
+        413,
+        416,
+        419,
+        422,
+        423,
+        424,
+        425,
+        429,
+        448,
+        450
+      ],
+      "toolLines": {
+        "read": 419,
+        "write": 422,
+        "edit": 423,
+        "applyPatch": 424,
+        "bash": 413,
+        "pwsh": 416,
+        "search": 425,
+        "todo": 450,
+        "skill": 448,
+        "fsSearch": 429
+      }
+    },
+    {
+      "id": "cto-ux",
+      "name": "CTO 办公室 · UI/UX 设计",
+      "order": 25,
+      "description": "只读调研界面与使用路径，产出摩擦点清单、交互规格与可粘贴的 HTML/CSS 片段；不落盘、不碰代码。",
+      "isRoot": false,
+      "canDispatch": false,
+      "tools": {
+        "read": true,
+        "write": false,
+        "edit": false,
+        "applyPatch": false,
+        "bash": true,
+        "pwsh": true,
+        "search": true,
+        "jobs": false,
+        "todo": true,
+        "web": true,
+        "askUser": false,
+        "present": false,
+        "goal": false,
+        "office": false,
+        "subagent": false,
+        "skill": true,
+        "fsSearch": true
+      },
+      "delegation": {
+        "mounted": false,
+        "defaultPreset": null,
+        "interrupt": null,
+        "allowedAgentPresets": []
+      },
+      "sourceRefs": [
+        474,
+        495,
+        498,
+        501,
+        504,
+        505,
+        506,
+        507,
+        511,
+        530,
+        532,
+        536
+      ],
+      "toolLines": {
+        "read": 501,
+        "write": 504,
+        "edit": 505,
+        "applyPatch": 506,
+        "bash": 495,
+        "pwsh": 498,
+        "search": 507,
+        "todo": 532,
+        "web": 536,
+        "skill": 530,
+        "fsSearch": 511
+      }
+    },
+    {
+      "id": "cto-product",
+      "name": "CTO 办公室 · 业务",
+      "order": 26,
+      "description": "从真实使用场景出发，把模糊需求变成需求假设、成功指标与可测验收标准；不替用户排优先级。",
+      "isRoot": false,
+      "canDispatch": false,
+      "tools": {
+        "read": true,
+        "write": false,
+        "edit": false,
+        "applyPatch": false,
+        "bash": true,
+        "pwsh": true,
+        "search": true,
+        "jobs": false,
+        "todo": true,
+        "web": true,
+        "askUser": false,
+        "present": false,
+        "goal": false,
+        "office": false,
+        "subagent": false,
+        "skill": true,
+        "fsSearch": true
+      },
+      "delegation": {
+        "mounted": false,
+        "defaultPreset": null,
+        "interrupt": null,
+        "allowedAgentPresets": []
+      },
+      "sourceRefs": [
+        561,
+        582,
+        585,
+        588,
+        591,
+        592,
+        593,
+        594,
+        598,
+        617,
+        619,
+        623
+      ],
+      "toolLines": {
+        "read": 588,
+        "write": 591,
+        "edit": 592,
+        "applyPatch": 593,
+        "bash": 582,
+        "pwsh": 585,
+        "search": 594,
+        "todo": 619,
+        "web": 623,
+        "skill": 617,
+        "fsSearch": 598
+      }
+    }
+  ],
+  "lineHints": {
+    "tools": {
+      "read": [
+        46,
+        168,
+        255,
+        337,
+        419,
+        501,
+        588
+      ],
+      "write": [
+        171,
+        340,
+        422,
+        504,
+        591
+      ],
+      "edit": [
+        172,
+        341,
+        423,
+        505,
+        592
+      ],
+      "applyPatch": [
+        49,
+        173,
+        258,
+        342,
+        424,
+        506,
+        593
+      ],
+      "bash": [
+        40,
+        162,
+        249,
+        331,
+        413,
+        495,
+        582
+      ],
+      "pwsh": [
+        43,
+        165,
+        252,
+        334,
+        416,
+        498,
+        585
+      ],
+      "search": [
+        50,
+        174,
+        259,
+        343,
+        425,
+        507,
+        594
+      ],
+      "jobs": [
+        54,
+        263
+      ],
+      "todo": [
+        125,
+        199,
+        286,
+        368,
+        450,
+        532,
+        619
+      ],
+      "askUser": [
+        123
+      ],
+      "present": [
+        134
+      ],
+      "goal": [
+        79
+      ],
+      "office": [
+        136
+      ],
+      "subagent": []
+    },
+    "disabledTools": {
+      "apply_patch": [
+        49,
+        173,
+        258,
+        342,
+        424,
+        506,
+        593
+      ],
+      "subagent_fork": [
+        17,
+        98
+      ],
+      "workflow": [
+        98
+      ]
+    }
+  }
+}
+</script>
+<!-- office-data:end -->
+
+<script type="application/json" id="office-copy">
+{
+  "meta": {
+    "title": "CTO 办公室 · 角色架构全景",
+    "charter": "skills/cto-office/SKILL.md",
+    "toolSemantics": {
+      "bash": "tool-bash；disabled 条件 process.platform === 'win32'（Windows 关闭）",
+      "pwsh": "tool-pwsh；disabled 条件 platform !== 'win32'（非 Windows 关闭）→ 与 bash 平台互斥",
+      "read": "tool-fs 的读能力，全部 preset 挂载",
+      "write": "tool-fs.config.write，缺省 true；为 false 的 preset 即只读岗",
+      "edit": "tool-fs.config.edit，缺省 true；为 false 的 preset 即只读岗",
+      "applyPatch": "7 个 preset 全为 false → 没有 apply_patch 工具",
+      "search": "tool-fs-search，7/7 挂载",
+      "jobs": "tool-jobs 仅根与工程师",
+      "todo": "tool-todo 7/7，allowParallelInProgress: true",
+      "askUser": "tool-ask-user 仅根",
+      "present": "present 仅根",
+      "goal": "command-goal + tool-goal，仅根",
+      "office": "tool-office 仅根",
+      "subagent": "delegation 组内 tool-subagent-control（interrupt: false）+ tool-subagent，仅根"
+    },
+    "disabledTools": {
+      "apply_patch": "7/7 关闭（applyPatch: false）",
+      "subagent_fork": "未挂载：会继承 CTO 全量工具，绕过岗位边界",
+      "workflow": "未挂载：没有角色槽位"
+    }
+  },
+  "counts": {
+    "gateEdges": 2
+  },
+  "gate": {
+    "ruler": "实现卡默认只过一道闸：默认派评审（写对了吗：契约与缺陷）；用户在意味道/行为、或卡里已列出可逐条实测的验收标准时，再并派 QA（做对了吗）。两个都要 = 两张并行卡，不是一张卡串两道。",
+    "twoCardNote": "闸门先后章程未规定（并行属推断）。",
+    "review": {
+      "question": "写对了吗（契约/缺陷）",
+      "verdicts": [
+        "PASS",
+        "CHANGES"
+      ]
+    },
+    "qa": {
+      "question": "做对了吗（验收标准逐条）",
+      "verdicts": [
+        "PASS",
+        "FAIL"
+      ]
+    }
+  },
+  "roles": [
+    {
+      "id": "cto-office",
+      "role": "CTO",
+      "gate": "—",
+      "skillPath": "skills/cto-office/SKILL.md",
+      "summary": "接需求、拆卡、派工给六个岗位、验结果、带证据汇报；不亲自写实现。",
+      "doList": [
+        "澄清需求并一次问全；有不可逆动作先问人",
+        "开卡：交付物 / 写入范围 / 依赖卡 / 验收标准，四件缺一不派",
+        "派工、跟进、按需过闸（默认评审）、结算，按四行汇报：做完了什么 / 已知边界 / 工作区状态 / 风险与下一步"
+      ],
+      "dontList": [
+        "不写实现：必须亲自写时先说明理由并取得用户同意",
+        "不替评审与 QA 下结论",
+        "不擅自做不可逆动作，不替用户拍优先级"
+      ]
+    },
+    {
+      "id": "cto-architect",
+      "role": "架构师",
+      "gate": "—",
+      "skillPath": "skills/cto-architect/SKILL.md",
+      "summary": "只读调研：方案对比、接口契约、拆卡建议、风险清单；不写实现、不改文件。",
+      "doList": [
+        "给至少两个候选方案 + 选型理由 + 被否原因",
+        "写契约：签名 / 文件边界 / 数据流 / 失败语义",
+        "拆卡建议与风险清单"
+      ],
+      "dontList": [
+        "不写文件、不改配置、不跑会改变状态的命令（bash 重定向同样越界）",
+        "不写实现",
+        "不做视觉与交互取舍，不替 CTO 定优先级"
+      ]
+    },
+    {
+      "id": "cto-builder",
+      "role": "工程师",
+      "gate": "—",
+      "skillPath": "skills/cto-builder/SKILL.md",
+      "summary": "按契约实现、小步自测、交可验证证据；不改契约与验收标准，不审自己的活。",
+      "doList": [
+        "读卡三件，缺一项就停下反馈，不猜",
+        "小步推进：每步能跑；改动只落在写入范围内",
+        "交四件事：改了什么 / 怎么验的 / 没做的和为什么 / 新问题"
+      ],
+      "dontList": [
+        "不改契约、不改验收标准",
+        "不顺手重构卡外代码，不扩张测试范围",
+        "不审自己的活"
+      ]
+    },
+    {
+      "id": "cto-reviewer",
+      "role": "评审",
+      "gate": "评审",
+      "skillPath": "skills/cto-reviewer/SKILL.md",
+      "summary": "只读审 diff 与契约一致性，跑测试验证，只给 PASS/CHANGES 与逐条证据；不替实现者改代码。",
+      "doList": [
+        "按顺序审四件事：对不对 / 合不合契约 / 有没有偷偷扩 / 测到没测到",
+        "跑测试与构建取证，证据落到 文件:行号 与命令输出",
+        "只输出 PASS 或 CHANGES，缺陷带 P0-P3"
+      ],
+      "dontList": [
+        "不改文件、不给完整补丁让实现者照抄",
+        "不做产品与视觉判断",
+        "不因「赶时间」放行 P0/P1"
+      ]
+    },
+    {
+      "id": "cto-qa",
+      "role": "QA",
+      "gate": "QA",
+      "skillPath": "skills/cto-qa/SKILL.md",
+      "summary": "按验收标准逐条实测，输出 PASS/FAIL 与每条的实测证据；不评审风格、不改代码。",
+      "doList": [
+        "把验收标准逐条抄下来编号，为每条设计可重复的实测步骤",
+        "真跑并记录实际输出，判 PASS/FAIL，FAIL 给最小复现",
+        "不可实测的条目标 BLOCKED 并说明缺什么"
+      ],
+      "dontList": [
+        "不做代码评审（那是评审的活）",
+        "不改代码、不改验收标准",
+        "不按「大部分通过」给 PASS"
+      ]
+    },
+    {
+      "id": "cto-ux",
+      "role": "UI/UX 设计",
+      "gate": "—",
+      "skillPath": "skills/cto-ux/SKILL.md",
+      "summary": "只读调研界面与使用路径：摩擦点清单、交互规格、可粘贴 HTML/CSS 片段；不落盘、不碰代码。",
+      "doList": [
+        "使用路径 + 摩擦点（触发条件→现象→影响→证据）",
+        "交互规格定义全部状态：默认/空/错误/禁用/超长/键盘/窄屏",
+        "可粘贴片段标注落点；视觉取舍标「待用户确认」"
+      ],
+      "dontList": [
+        "不落盘、不写文件，片段以文本交回",
+        "不替用户定品牌调性",
+        "不做代码架构判断"
+      ]
+    },
+    {
+      "id": "cto-product",
+      "role": "业务",
+      "gate": "—",
+      "skillPath": "skills/cto-product/SKILL.md",
+      "summary": "从真实使用场景出发，把模糊需求变成需求假设、成功指标与可测验收标准草案；不替用户排优先级。",
+      "doList": [
+        "需求假设：谁 / 什么场景 / 现在怎么凑合 / 为什么不够，标「有证据」或「待验证」",
+        "成功指标 + 可测、可跑、逐条编号的验收标准草案",
+        "必须问人的问题一次列全 + 范围建议"
+      ],
+      "dontList": [
+        "不改代码、不改卡",
+        "不替用户决定优先级与价值取舍",
+        "不评估技术可行性（那是架构师的活）"
+      ]
+    }
+  ],
+  "dispatchEdges": [
+    {
+      "from": "cto-office",
+      "to": "cto-architect",
+      "via": "subagent(agent_preset)",
+      "when": "跨模块或要改接口先出契约；纯调研选型只派他一个"
+    },
+    {
+      "from": "cto-office",
+      "to": "cto-builder",
+      "via": "subagent(agent_preset)",
+      "when": "默认派工目标（agentPreset 缺省值即 cto-builder）"
+    },
+    {
+      "from": "cto-office",
+      "to": "cto-reviewer",
+      "via": "subagent(agent_preset)",
+      "when": "实现卡落点：写对了吗"
+    },
+    {
+      "from": "cto-office",
+      "to": "cto-qa",
+      "via": "subagent(agent_preset)",
+      "when": "实现卡落点：做对了吗"
+    },
+    {
+      "from": "cto-office",
+      "to": "cto-ux",
+      "via": "subagent(agent_preset)",
+      "when": "有界面时，拿交互规格后再让工程师实现"
+    },
+    {
+      "from": "cto-office",
+      "to": "cto-product",
+      "via": "subagent(agent_preset)",
+      "when": "需求本身模糊时，先拿验收标准草案去跟用户确认"
+    }
+  ],
+  "gateEdges": [
+    {
+      "from": "cto-builder",
+      "to": "cto-reviewer",
+      "gate": "评审",
+      "blocksSettlement": true
+    },
+    {
+      "from": "cto-builder",
+      "to": "cto-qa",
+      "gate": "QA",
+      "blocksSettlement": true
+    }
+  ],
+  "returnEdges": [
+    {
+      "from": "cto-architect",
+      "to": "cto-office",
+      "carries": "方案 / 契约 / 拆卡 / 风险"
+    },
+    {
+      "from": "cto-builder",
+      "to": "cto-office",
+      "carries": "改了什么 / 怎么验的 / 没做的 / 新问题"
+    },
+    {
+      "from": "cto-reviewer",
+      "to": "cto-office",
+      "carries": "PASS 或 CHANGES + 逐条证据"
+    },
+    {
+      "from": "cto-qa",
+      "to": "cto-office",
+      "carries": "PASS/FAIL + 每条实测证据"
+    },
+    {
+      "from": "cto-ux",
+      "to": "cto-office",
+      "carries": "摩擦点 / 交互规格 / HTML-CSS 文本片段"
+    },
+    {
+      "from": "cto-product",
+      "to": "cto-office",
+      "carries": "需求假设 / 成功指标 / 验收标准草案 / 待问人的问题"
+    }
+  ],
+  "steps": [
+    {
+      "id": "clarify",
+      "order": 1,
+      "name": "澄清",
+      "goal": "动手前把歧义和不可逆动作问清，一次问全",
+      "participants": [
+        "cto-office",
+        "用户"
+      ],
+      "output": "问题清单 + 需求复述；判断有无不可逆动作（删数据/发布/改线上配置/花钱）",
+      "failure": "需求矛盾或要动不可逆操作 → 停下问人",
+      "blockedBy": "只有根挂 tool-ask-user（122），六个岗位无法直接问用户"
+    },
+    {
+      "id": "open-card",
+      "order": 2,
+      "name": "开卡",
+      "goal": "把活切成一张带验收标准与写入范围的卡",
+      "participants": [
+        "cto-office"
+      ],
+      "output": "subject / description / write_scopes / blocked_by / 逐条可测的验收标准",
+      "failure": "没有验收标准的卡不许派；任务板不可用时用 todo_write 记账并提醒用户开 Agent Teams",
+      "blockedBy": "只有根动板子（成员只读自己那张卡）"
+    },
+    {
+      "id": "dispatch",
+      "order": 3,
+      "name": "派工",
+      "goal": "按岗位派人，卡内容全量进 prompt",
+      "participants": [
+        "cto-office",
+        "被派的岗位"
+      ],
+      "output": "subagent 调用（agent_preset + 完整卡内容）",
+      "failure": "并行只在写入范围不重叠时开；子代理看不到对话，卡没写进 prompt 等于没派",
+      "blockedBy": "只有根挂 delegation（99）与 tool-subagent（107）；子代理不能再派工"
+    },
+    {
+      "id": "follow",
+      "order": 4,
+      "name": "跟进",
+      "goal": "盯住运行中的子代理，拿中间结论而不是干等",
+      "participants": [
+        "cto-office",
+        "在跑的岗位"
+      ],
+      "output": "wait_agent / list_agents 的返回与阶段性结论",
+      "failure": "子代理不主动汇报；两轮无进展就停下来问人；派出的活不能中断（interrupt: false）",
+      "blockedBy": "子代理没有 tool-jobs，长任务不能自己转后台"
+    },
+    {
+      "id": "gates",
+      "order": 5,
+      "name": "闸门",
+      "goal": "默认一道闸，两个都要=两张并行卡：默认派评审，用户在意行为或卡里已列可逐条实测的验收标准时再并派 QA。",
+      "participants": [
+        "cto-reviewer",
+        "cto-qa"
+      ],
+      "output": "评审：PASS / CHANGES + P0-P3；QA：PASS / FAIL（N/M）+ 每条证据",
+      "failure": "CHANGES 或 FAIL → 回第 3 步重做；同一卡回退 ≥2 次升级给用户。",
+      "blockedBy": "闸门由 CTO 手动派；两道闸都只读，可并行。"
+    },
+    {
+      "id": "settle",
+      "order": 6,
+      "name": "结算",
+      "goal": "卡改完成并写明证据，向用户一屏汇报",
+      "participants": [
+        "cto-office"
+      ],
+      "output": "任务板卡置完成 + 证据；按四行汇报：做完了什么 / 已知边界 / 工作区状态 / 风险与下一步",
+      "failure": "拿不出证据的卡退回；「已完成」不算证据",
+      "blockedBy": "改板要 revision CAS"
+    }
+  ],
+  "scenarios": [
+    {
+      "id": "bug-one-line",
+      "title": "一行修复",
+      "when": "故障点明确、改动落在一个文件的一行到几行",
+      "participants": [
+        "cto-builder",
+        "cto-reviewer"
+      ],
+      "cardCount": 2,
+      "parallelizable": false,
+      "gate": "评审（单闸）",
+      "basis": "章程：「一行修复：cto-builder + cto-reviewer，两张卡。」",
+      "steps": [
+        {
+          "order": 1,
+          "preset": "cto-builder",
+          "action": "按卡修这一行，小步自测",
+          "output": "文件:行号 + 复现命令与前后输出"
+        },
+        {
+          "order": 2,
+          "preset": "cto-reviewer",
+          "action": "审 diff 并跑测试确认没扩范围",
+          "output": "PASS 或 CHANGES + 证据"
+        }
+      ]
+    },
+    {
+      "id": "new-ui",
+      "title": "新增界面",
+      "when": "需求里出现用户可见的界面或使用路径变化",
+      "participants": [
+        "cto-ux",
+        "cto-builder",
+        "cto-reviewer",
+        "cto-qa"
+      ],
+      "cardCount": 4,
+      "parallelizable": true,
+      "gate": "双闸（评审 + QA）",
+      "basis": "章程：「有界面：加一次 cto-ux，拿到交互规格后再让工程师实现。」",
+      "steps": [
+        {
+          "order": 1,
+          "preset": "cto-ux",
+          "action": "走使用路径、列摩擦点、出交互规格与可粘贴片段",
+          "output": "摩擦点 + 全状态交互规格 + 片段（不落盘）"
+        },
+        {
+          "order": 2,
+          "preset": "cto-builder",
+          "action": "粘贴片段并实现，落盘由他做",
+          "output": "改动清单 + 自测证据"
+        },
+        {
+          "order": 3,
+          "preset": "cto-reviewer",
+          "action": "审代码与契约一致性",
+          "output": "PASS / CHANGES",
+          "parallelWith": "cto-qa"
+        },
+        {
+          "order": 4,
+          "preset": "cto-qa",
+          "action": "按验收标准逐条实测界面行为",
+          "output": "PASS / FAIL（N/M）+ 每条证据",
+          "parallelWith": "cto-reviewer"
+        }
+      ]
+    },
+    {
+      "id": "fuzzy-req",
+      "title": "需求模糊",
+      "when": "用户只说了「要 X」，没有场景、没有成功标准、验收标准不可测",
+      "participants": [
+        "cto-product",
+        "cto-office",
+        "cto-builder"
+      ],
+      "cardCount": 2,
+      "parallelizable": false,
+      "gate": "确认前不开实现卡",
+      "basis": "章程：「需求本身就模糊：先 cto-product，它给出验收标准草案，你拿去跟用户确认。」",
+      "steps": [
+        {
+          "order": 1,
+          "preset": "cto-product",
+          "action": "把模糊需求变成需求假设、成功指标、验收标准草案、待问人的问题",
+          "output": "五项产出（含「有证据 / 待验证」标注）"
+        },
+        {
+          "order": 2,
+          "preset": "cto-office",
+          "action": "拿草案去跟用户确认（业务岗没有 ask-user 工具）",
+          "output": "确认后的需求与可测验收标准"
+        },
+        {
+          "order": 3,
+          "preset": "cto-builder",
+          "action": "确认后才开实现卡",
+          "output": "实现 + 证据"
+        }
+      ]
+    },
+    {
+      "id": "cross-module-api",
+      "title": "跨模块改接口",
+      "when": "改动跨两个以上模块，或要动函数签名 / 数据结构 / 对外接口",
+      "participants": [
+        "cto-architect",
+        "cto-builder",
+        "cto-reviewer",
+        "cto-qa"
+      ],
+      "cardCount": 3,
+      "parallelizable": true,
+      "gate": "双闸（评审 + QA）",
+      "basis": "章程：「跨模块或要改接口：先 cto-architect 出一页契约，再并行派工程师。」+ 铁律一卡一 owner",
+      "steps": [
+        {
+          "order": 1,
+          "preset": "cto-architect",
+          "action": "出一页契约：签名 / 文件边界 / 数据流 / 失败语义 + 拆卡建议",
+          "output": "契约 + 不重叠的写入路径分片"
+        },
+        {
+          "order": 2,
+          "preset": "cto-builder",
+          "action": "按分片并行实现，各卡 write_scopes 互不重叠",
+          "output": "逐卡改动 + 自测证据"
+        },
+        {
+          "order": 3,
+          "preset": "cto-reviewer",
+          "action": "审「合不合契约」这一层",
+          "output": "PASS / CHANGES",
+          "parallelWith": "cto-qa"
+        },
+        {
+          "order": 4,
+          "preset": "cto-qa",
+          "action": "按验收标准实测接口改动的真实行为",
+          "output": "PASS / FAIL（N/M）+ 每条证据",
+          "parallelWith": "cto-reviewer"
+        }
+      ]
+    },
+    {
+      "id": "research-selection",
+      "title": "纯调研选型",
+      "when": "只产出结论与建议，没有代码要落地",
+      "participants": [
+        "cto-architect"
+      ],
+      "cardCount": 1,
+      "parallelizable": false,
+      "gate": "无闸；结论由 CTO 拍板",
+      "basis": "章程：「纯调研选型：cto-architect 一个人就够。」",
+      "steps": [
+        {
+          "order": 1,
+          "preset": "cto-architect",
+          "action": "对比至少两个候选（含被否原因）、给选型理由与风险清单",
+          "output": "方案对比 + 建议 + 待拍板项"
+        }
+      ]
+    },
+    {
+      "id": "contract-review",
+      "title": "契约评审（推断）",
+      "when": "契约本身要先被审一遍，再决定是否开工",
+      "participants": [
+        "cto-architect",
+        "cto-reviewer"
+      ],
+      "cardCount": 2,
+      "parallelizable": false,
+      "gate": "评审（在实现之前）",
+      "inferred": true,
+      "basis": "推断：章程未列此场景；依据评审规程「合不合契约」一条。页面须标「推断」。",
+      "steps": [
+        {
+          "order": 1,
+          "preset": "cto-architect",
+          "action": "出契约与变体方案",
+          "output": "契约文本 + 风险清单"
+        },
+        {
+          "order": 2,
+          "preset": "cto-reviewer",
+          "action": "只读审契约一致性与可测性",
+          "output": "PASS / CHANGES"
+        }
+      ]
+    }
+  ],
+  "boundaries": {
+    "ironRules": [
+      {
+        "no": 1,
+        "text": "一卡一 owner；并行卡不许共享写入路径（write_scopes 是提示不是锁）"
+      },
+      {
+        "no": 2,
+        "text": "做的人不验收：验收结论必须来自评审或 QA，且带证据"
+      },
+      {
+        "no": 3,
+        "text": "证据优先：命令输出、diff、文件:行号；拿不出证据的卡退回"
+      },
+      {
+        "no": 4,
+        "text": "只读岗越界即作废：改了文件（bash 重定向也算）→ 本轮结论作废重派"
+      },
+      {
+        "no": 5,
+        "text": "不自己下场：CTO 必须亲自写时先说明理由并取得同意"
+      },
+      {
+        "no": 6,
+        "text": "卡住就问人：两轮无进展、需求矛盾、不可逆操作 → 停下来问"
+      },
+      {
+        "no": 7,
+        "text": "范围守卫：顺手改了卡外的东西 → 退回，不许顺手重构"
+      }
+    ],
+    "knownLimits": [
+      {
+        "text": "成员是子代理会话，不是常驻身份；同会话 send_message 可续聊，跨会话没有记忆"
+      },
+      {
+        "text": "bash 本身能写文件，只读边界是「没有 write/edit 工具」+ 章程铁律两层，不是内核级沙盒"
+      },
+      {
+        "text": "write_scopes 是提示不是锁，冲突靠 revision CAS 与分片纪律"
+      },
+      {
+        "text": "不引入 workflow 与 subagent_fork：前者没有角色槽位，后者会让子代理继承 CTO 全量工具"
+      },
+      {
+        "text": "bundle 把该 profile 的 agent-team 默认打开（maxTasks 256），会话菜单仍可逐会话关闭"
+      }
+    ],
+    "platform": [
+      {
+        "text": "tool-bash 与 tool-pwsh 平台互斥：macOS/Linux 用 bash，Windows 用 pwsh"
+      },
+      {
+        "text": "7 个 preset 全部 applyPatch: false，没有 apply_patch 工具，落盘只能靠 write/edit"
+      },
+      {
+        "text": "7 个 preset 的 skill-filesystem 指向整包 skills/，每个角色都能读到全部 7 份 SKILL.md；边界靠 persona「开工先加载 skill X」"
+      }
+    ],
+    "neverHappens": [
+      "子代理之间横向派工或互相通信（delegation 只在根）",
+      "子代理直接问用户（tool-ask-user 只在根）",
+      "子代理常驻或跨会话记忆",
+      "只读岗被内核级沙箱拦住（靠工具缺失 + 铁律，不靠沙箱）",
+      "用 apply_patch 落盘（7/7 关闭）"
+    ]
+  }
+}
+</script>
+<script>
+(function () {
+  'use strict';
+
+  var facts = JSON.parse(document.getElementById('office-data').textContent);
+  var bootIssues = [];
+  var copy = {};
+  try {
+    copy = JSON.parse(document.getElementById('office-copy').textContent);
+  } catch (err) {
+    bootIssues.push('office-copy JSON 不可解析：' + (err && err.message ? err.message : String(err)));
+  }
+  var data;
+  try {
+    data = mergeOfficeData(facts, copy);
+  } catch (err) {
+    bootIssues.push('数据合并失败：' + (err && err.message ? err.message : String(err)));
+    data = minimalData(facts);
+  }
+  var meta = data.meta;
+  var counts = meta.counts;
+  var ts = meta.toolSemantics;
+  var roles = data.roles;
+  var roleById = new Map(roles.map(function (r) { return [r.id, r]; }));
+  var rootRole = roles.filter(function (r) { return r.isRoot; })[0] || roles[0];
+  var html = document.documentElement;
+
+  function $(sel, ctx) { return (ctx || document).querySelector(sel); }
+  function $$(sel, ctx) { return Array.prototype.slice.call((ctx || document).querySelectorAll(sel)); }
+  var ESC_MAP = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+  function esc(v) { return String(v == null ? '' : v).replace(/[&<>"']/g, function (ch) { return ESC_MAP[ch]; }); }
+
+  function minimalData(facts) {
+    var prov = facts.provenance || {};
+    return {
+      meta: {
+        title: 'CTO 办公室 · 角色架构全景',
+        sourceFile: prov.sourceFile || 'cordis.patch.yml',
+        sourceLines: prov.lines || 0,
+        bundle: facts.bundle || '',
+        charter: '',
+        counts: facts.counts || {},
+        toolSemantics: {},
+        disabledTools: {},
+        gate: {},
+        provenance: prov
+      },
+      roles: (facts.presets || []).map(function (p) {
+        return {
+          id: p.id,
+          presetName: p.name,
+          role: String(p.name || p.id).replace(/^CTO 办公室 · /, ''),
+          order: p.order,
+          isRoot: p.isRoot,
+          canDispatch: p.canDispatch,
+          tools: p.tools,
+          sourceRefs: p.sourceRefs,
+          summary: p.description || '',
+          doList: [],
+          dontList: [],
+          gate: '—',
+          skillPath: ''
+        };
+      }),
+      dispatchEdges: [],
+      gateEdges: [],
+      returnEdges: [],
+      steps: [],
+      scenarios: [],
+      boundaries: { ironRules: [], knownLimits: [], platform: [], neverHappens: [] },
+      issues: ['office-copy 缺失或不可解析']
+    };
+  }
+
+  function mergeOfficeData(facts, copy) {
+    var issues = [];
+    var hints = facts.lineHints || {};
+    var toolHints = hints.tools || {};
+    var offHints = hints.disabledTools || {};
+    function withLines(text, key, table) {
+      var lines = table[key] || [];
+      return String(text) + (lines.length ? ' @ ' + lines.join(',') : '');
+    }
+    var toolSemantics = {};
+    Object.keys(copy.meta.toolSemantics).forEach(function (key) {
+      toolSemantics[key] = withLines(copy.meta.toolSemantics[key], key, toolHints);
+    });
+    var disabledTools = {};
+    Object.keys(copy.meta.disabledTools).forEach(function (key) {
+      disabledTools[key] = withLines(copy.meta.disabledTools[key], key, offHints);
+    });
+    var counts = Object.assign({}, copy.counts, facts.counts);
+    var meta = {
+      title: copy.meta.title,
+      sourceFile: facts.provenance.sourceFile,
+      sourceLines: facts.provenance.lines,
+      bundle: facts.bundle,
+      charter: copy.meta.charter,
+      counts: counts,
+      toolSemantics: toolSemantics,
+      disabledTools: disabledTools,
+      gate: copy.gate,
+      provenance: facts.provenance
+    };
+    var roles = facts.presets.map(function (preset) {
+      var c = (copy.roles || []).filter(function (r) { return r.id === preset.id; })[0] || {};
+      var fallbackRole = preset.name.replace(/^CTO 办公室 · /, '');
+      return {
+        id: preset.id,
+        presetName: preset.name,
+        role: c.role || fallbackRole,
+        order: preset.order,
+        isRoot: preset.isRoot,
+        canDispatch: preset.canDispatch,
+        tools: preset.tools,
+        sourceRefs: preset.sourceRefs,
+        summary: c.summary || preset.description,
+        doList: c.doList || [],
+        dontList: c.dontList || [],
+        gate: c.gate || '—',
+        skillPath: c.skillPath || ''
+      };
+    });
+    var gateCopy = copy.gate || {};
+    function gateSpec(key) {
+      var spec = gateCopy[key];
+      if (!spec || typeof spec.question !== 'string' || !Array.isArray(spec.verdicts)) {
+        issues.push('gate.' + key + ' 缺失或格式不对');
+        return { question: '', verdicts: [] };
+      }
+      return spec;
+    }
+    var gateEdges = (copy.gateEdges || []).map(function (edge) {
+      var spec = gateSpec(edge.to === 'cto-qa' || edge.gate === 'QA' ? 'qa' : 'review');
+      return {
+        from: edge.from,
+        to: edge.to,
+        gate: edge.gate,
+        question: spec.question,
+        verdict: spec.verdicts,
+        blocksSettlement: !!edge.blocksSettlement
+      };
+    });
+    return {
+      meta: meta,
+      roles: roles,
+      dispatchEdges: copy.dispatchEdges,
+      gateEdges: gateEdges,
+      returnEdges: copy.returnEdges,
+      steps: copy.steps,
+      scenarios: copy.scenarios,
+      boundaries: copy.boundaries,
+      issues: issues
+    };
+  }
+
+  function shortName(r) {
+    if (!r) return '';
+    return r.isRoot ? r.presetName : r.presetName.replace(/^CTO 办公室 · /, '');
+  }
+  function lineOf(v) {
+    var text = String(v == null ? '' : v);
+    var at = text.lastIndexOf('@');
+    if (at < 0) return null;
+    var nums = text.slice(at + 1).match(/\d+/g);
+    return nums ? Number(nums[nums.length - 1]) : null;
+  }
+  function badge(n) {
+    return n ? '<span class="patch">' + esc(meta.sourceFile) + ':' + n + '</span>' : '';
+  }
+  function badges(list) {
+    return list.filter(function (n) { return n != null; }).map(badge).join('');
+  }
+
+  var ICON = {
+    'cto-office': 'i-hub',
+    'cto-architect': 'i-lock',
+    'cto-builder': 'i-write',
+    'cto-reviewer': 'i-gate',
+    'cto-qa': 'i-gate',
+    'cto-ux': 'i-globe',
+    'cto-product': 'i-globe'
+  };
+
+  var NODE_POS = {
+    'cto-product': { x: 50, y: 10 },
+    'cto-architect': { x: 18, y: 30 },
+    'cto-ux': { x: 82, y: 30 },
+    'cto-reviewer': { x: 18, y: 70 },
+    'cto-qa': { x: 82, y: 70 },
+    'cto-builder': { x: 50, y: 90 },
+    'cto-office': { x: 50, y: 50 }
+  };
+
+  var state = {
+    selected: 'cto-office',
+    hover: null,
+    step: 0,
+    sim: { id: null, phase: 'idle', tick: 0, timer: null, log: [] }
+  };
+
+  var liveTimer = null;
+  function announce(msg) {
+    var live = $('#live');
+    if (!live) return;
+    window.clearTimeout(liveTimer);
+    live.textContent = '';
+    liveTimer = window.setTimeout(function () { live.textContent = msg; }, 40);
+  }
+  function setHover(id) {
+    state.hover = id || null;
+    if (id) html.setAttribute('data-hover-role', id);
+    else html.removeAttribute('data-hover-role');
+  }
+
+  /* ---------------- generated link styles (attribute-driven) ---------------- */
+  var linkCSS = [];
+  roles.forEach(function (r) {
+    var id = r.id;
+    linkCSS.push(
+      ':root[data-selected="' + id + '"] [data-role-node="' + id + '"]{' +
+        'border-color:rgba(90,200,250,.85);' +
+        'background-image:linear-gradient(180deg,rgba(90,200,250,.2),rgba(90,200,250,.05));' +
+        'box-shadow:0 0 0 1px rgba(90,200,250,.65),0 0 30px rgba(90,200,250,.16)}',
+      ':root[data-selected="' + id + '"] [data-role-node="' + id + '"] .node-role{' +
+        'color:var(--accent)}',
+      ':root[data-hover-role="' + id + '"] [data-role-node="' + id + '"]{' +
+        'border-color:rgba(90,200,250,.55);box-shadow:0 0 22px rgba(90,200,250,.12)}',
+      ':root[data-hover-role="' + id + '"] [data-edge-to="' + id + '"]{stroke:var(--accent);opacity:1}',
+      ':root[data-hover-role="' + id + '"] [data-edge-from="' + id + '"]{stroke:var(--accent);opacity:.85}',
+      ':root[data-selected="' + id + '"] [data-edge-to="' + id + '"]{stroke:rgba(90,200,250,.8)}',
+      ':root[data-selected="' + id + '"] [data-edge-from="' + id + '"]{stroke:rgba(90,200,250,.5)}',
+      ':root[data-hover-role="' + id + '"] tr[data-role-row="' + id + '"]{background:rgba(90,200,250,.08)}',
+      ':root[data-hover-role="' + id + '"] tr[data-role-row="' + id + '"] .rowhead{background:#15212b;color:var(--text)}',
+      ':root[data-selected="' + id + '"] tr[data-role-row="' + id + '"]{background:rgba(90,200,250,.1)}',
+      ':root[data-selected="' + id + '"] tr[data-role-row="' + id + '"] .rowhead{' +
+        'background:#16232d;box-shadow:inset 3px 0 0 var(--accent);color:var(--text)}'
+    );
+  });
+  var linkStyle = document.createElement('style');
+  linkStyle.textContent = linkCSS.join('\n');
+  document.head.appendChild(linkStyle);
+
+  /* ---------------- header / meta ---------------- */
+  function renderMeta() {
+    $('#eyebrow-bundle').textContent = meta.bundle;
+    $('#meta-row').innerHTML = [
+      '<span class="stat"><b>' + esc(meta.bundle) + '</b></span>',
+      '<span class="stat">事实来源 <span class="patch">' + esc(meta.sourceFile) + ' · ' + meta.sourceLines + ' 行</span></span>',
+      '<span class="stat">章程 <b>' + esc(meta.charter) + '</b></span>',
+      '<span class="stat"><b>' + counts.presets + '</b> presets · <b>' + counts.root + '</b> root · <b>' + counts.posts + '</b> posts</span>'
+    ].join('');
+    $('#topo-ref').outerHTML = '<span class="patch" id="topo-ref">' + esc(meta.sourceFile) + ':' + lineOf(ts.subagent) + '</span>';
+    $('#matrix-ref').outerHTML = '<span class="patch" id="matrix-ref">' + esc(meta.sourceFile) + ':' + lineOf(ts.read) + '</span>';
+  }
+
+  /* ---------------- quick read ---------------- */
+  function renderQuick() {
+    var rootRef = rootRole.sourceRefs[0];
+    var cards = [
+      {
+        big: counts.presets, unit: '个预设', title: counts.root + ' 个 CTO + ' + counts.posts + ' 个岗位',
+        text: '根 preset 带六个岗位 preset；岗位不单独开会话，只作为派工选项。',
+        refs: [rootRef]
+      },
+      {
+        big: counts.dispatchEdges, unit: '条派工边', title: '唯一 hub 是 CTO',
+        text: '六条实线全部从 cto-office 出发；岗位之间没有连线，也没有横向派工。',
+        refs: [lineOf(ts.subagent)]
+      },
+      {
+        big: counts.gateEdges, unit: '道闸（是「或」）', title: '写对了吗 / 做对了吗',
+        text: meta.gate.ruler,
+        refs: [roleById.get('cto-reviewer').sourceRefs[0], roleById.get('cto-qa').sourceRefs[0]]
+      },
+      {
+        big: roles.length + '/' + roles.length, unit: 'apply_patch 关闭', title: '边界是工具缺失',
+        text: '只读岗没有 write/edit；bash 仍能写文件，所以不是内核级沙盒。',
+        refs: [lineOf(ts.applyPatch), lineOf(ts.write)]
+      }
+    ];
+    $('#quick-cards').innerHTML = cards.map(function (c) {
+      return '<article class="quick-card">' +
+        '<div class="big">' + esc(c.big) + '<span class="unit">' + esc(c.unit) + '</span></div>' +
+        '<h3>' + esc(c.title) + '</h3>' +
+        '<p>' + esc(c.text) + '</p>' +
+        '<div class="refs" style="border-top:0;padding-top:0">' + badges(c.refs) + '</div>' +
+        '</article>';
+    }).join('');
+  }
+
+  /* ---------------- six-step flow ---------------- */
+  function buildStepTrack() {
+    $('#step-track').innerHTML = data.steps.map(function (s, i) {
+      return '<li><button type="button" data-step="' + i + '" aria-current="' + (i === state.step ? 'step' : 'false') + '">' +
+        '<span class="dot-num">' + String(s.order).padStart(2, '0') + '</span>' +
+        '<span>' + esc(s.name) + '</span></button></li>';
+    }).join('');
+    drawStepLoop();
+  }
+  function drawStepLoop() {
+    var track = $('#step-track'), svg = $('#step-loop');
+    if (!track || !svg) return;
+    var btns = $$('#step-track button');
+    if (btns.length < 5) return;
+    var tr = track.getBoundingClientRect();
+    if (!tr.width) return;
+    function cx(btn) {
+      var b = btn.getBoundingClientRect();
+      return ((b.left + b.width / 2 - tr.left) / tr.width) * 600;
+    }
+    var x5 = cx(btns[4]), x3 = cx(btns[2]);
+    var path = svg.querySelector('.loop-path'), arrow = svg.querySelector('.loop-arrow');
+    path.setAttribute('d', 'M ' + x5.toFixed(1) + ' 3 C ' + x5.toFixed(1) + ' 34, ' + x3.toFixed(1) + ' 34, ' + x3.toFixed(1) + ' 11');
+    arrow.setAttribute('d', 'M ' + (x3 - 2.4).toFixed(1) + ' 13 L ' + x3.toFixed(1) + ' 6 L ' + (x3 + 2.4).toFixed(1) + ' 13');
+  }
+  function renderStep() {
+    $$('#step-track button').forEach(function (btn, i) {
+      btn.setAttribute('aria-current', i === state.step ? 'step' : 'false');
+    });
+    var s = data.steps[state.step];
+    $('#step-body').innerHTML =
+      '<h3>第 ' + s.order + ' 步 · ' + esc(s.name) + '</h3>' +
+      '<p class="step-goal">' + esc(s.goal) + '</p>' +
+      '<dl class="step-rows">' +
+        '<dt>参与</dt><dd>' + s.participants.map(function (p) {
+          return esc(roleById.has(p) ? roleById.get(p).role : p);
+        }).join('、') + '</dd>' +
+        '<dt>产出</dt><dd>' + esc(s.output) + '</dd>' +
+        '<dt>失败</dt><dd>' + (s.id === 'gates'
+          ? '<button type="button" class="back-chip" data-goto-step="2">↩ 回第 3 步 · 重开派工卡</button>'
+          : '') + esc(s.failure) + '</dd>' +
+        '<dt>约束</dt><dd>' + esc(s.blockedBy) + '</dd>' +
+      '</dl>';
+    $('#step-count').textContent = '第 ' + s.order + ' / ' + data.steps.length + ' 步';
+    $('#step-prev').disabled = state.step === 0;
+    $('#step-next').disabled = state.step === data.steps.length - 1;
+  }
+  function goStep(n) {
+    var next = Math.max(0, Math.min(data.steps.length - 1, n));
+    if (next === state.step) return;
+    state.step = next;
+    renderStep();
+    announce('第 ' + data.steps[next].order + ' 步：' + data.steps[next].name);
+  }
+  function renderGateNote() {
+    $('#gate-note').innerHTML = '<strong>闸门是「或」：</strong>' + esc(meta.gate.ruler) + ' ' + badge(lineOf(ts.subagent));
+  }
+
+  /* ---------------- topology ---------------- */
+  function nodeHTML(r) {
+    var pos = NODE_POS[r.id];
+    var chip = r.isRoot ? '根 · 唯一 hub'
+      : (r.gate !== '—' ? '闸门·' + (r.gate === '评审' ? '写对了吗' : '做对了吗')
+        : (r.tools.write ? '可写' : '只读'));
+    return '<button type="button" class=\"role-card\"' + (r.isRoot ? ' data-root="true"' : '') + ' data-role-node="' + r.id + '"' +
+      ' aria-pressed="false" style="left:' + pos.x + '%;top:' + pos.y + '%">' +
+      '<span class="node-top"><svg class="icon" aria-hidden="true"><use href="#' + (ICON[r.id] || 'i-lock') + '"></use></svg>' +
+      '<span class="node-role">' + esc(r.role) + '</span><span class="node-order">' + r.order + '</span></span>' +
+      '<span class="node-name">' + esc(r.id) + '</span>' +
+      '<span class="node-chip">' + esc(chip) + '</span>' +
+      '<span class="patch"><span class="pf">' + esc(meta.sourceFile) + '</span><span class="pl">:' + r.sourceRefs[0] + '</span></span>' +
+      '</button>';
+  }
+  function renderStar() {
+    var paths = [];
+    data.dispatchEdges.forEach(function (e) {
+      var a = NODE_POS[e.from], b = NODE_POS[e.to];
+      paths.push('<line class="edge dispatch" data-edge-to="' + e.to + '" data-edge-from="' + e.from + '" x1="' + a.x + '" y1="' + a.y + '" x2="' + b.x + '" y2="' + b.y + '" vector-effect="non-scaling-stroke"></line>');
+    });
+    data.returnEdges.forEach(function (e) {
+      var a = NODE_POS[e.from], b = NODE_POS[e.to];
+      var mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+      var dx = b.x - a.x, dy = b.y - a.y;
+      var len = Math.sqrt(dx * dx + dy * dy) || 1;
+      var ox = -dy / len * 7, oy = dx / len * 7;
+      paths.push('<path class="edge return" data-edge-from="' + e.from + '" data-edge-to="' + e.to + '" d="M ' + a.x + ' ' + a.y + ' Q ' + (mx + ox) + ' ' + (my + oy) + ' ' + b.x + ' ' + b.y + '" vector-effect="non-scaling-stroke"></path>');
+    });
+    $('#star').innerHTML = '<svg class="wires" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true" focusable="false">' +
+      paths.join('') + '</svg>' + roles.map(nodeHTML).join('\n');
+  }
+
+  /* ---------------- detail ---------------- */
+  function neighborText(r) {
+    if (r.isRoot) return '六个岗位都只与 CTO 直连：六条派工边、六条回执边；岗位之间没有连线，也没有横向派工（delegation 只在根）。';
+    var dispatch = data.dispatchEdges.filter(function (e) { return e.to === r.id; })[0];
+    var back = data.returnEdges.filter(function (e) { return e.from === r.id; })[0];
+    var gatesIn = data.gateEdges.filter(function (e) { return e.to === r.id; });
+    var gatesOut = data.gateEdges.filter(function (e) { return e.from === r.id; });
+    var s = '唯一上级是 CTO';
+    if (dispatch) s += '，派工经 ' + dispatch.via;
+    s += back ? '；回执直接回 CTO（' + back.carries + '）' : '；没有回执边';
+    if (gatesIn.length) {
+      s += '；只对 ' + gatesIn.map(function (e) { return roleById.get(e.from).role; }).join('、') +
+        ' 的交付把 ' + gatesIn[0].gate + ' 闸——' + gatesIn[0].question + '，不改对方文件';
+    }
+    if (r.id === 'cto-reviewer' || r.id === 'cto-qa') {
+      var otherGate = data.gateEdges.filter(function (x) { return x.to !== r.id; })[0];
+      if (otherGate) s += '；另一道 ' + roleById.get(otherGate.to).role + ' 闸看「' + otherGate.question + '」';
+    }
+    if (gatesOut.length) {
+      s += '；交付可能过 ' + gatesOut.map(function (e) { return e.gate; }).join(' 或 ') +
+        ' 闸；两个都要 → 两张并行卡，不是串行，但不能直接指挥评审或 QA';
+    }
+    return s + '。';
+  }
+  function boundaryText(r) {
+    if (r.isRoot) return '全量工具 + 派工；铁律 5 要求 CTO 亲自写实现前先说明理由并取得用户同意，六个岗位也只能由 CTO 派；allowedAgentPresets 只列六个岗位，CTO 不派自己。';
+    var s = r.tools.write
+      ? '有 write/edit 工具，但没有联网（tool-web 未挂载）。'
+      : '没有 write/edit 工具（apply_patch 也关）；bash 仍能写文件，不是内核级沙盒——边界靠工具缺失 + 章程铁律两层。';
+    if (!r.tools.write && r.tools.web) s += ' 联网可用（tool-web 已挂载）。';
+    if (r.tools.jobs) s += ' 有 tool-jobs，长任务可自己转后台。';
+    return s;
+  }
+  function delivers(r) {
+    if (r.isRoot) return '汇总六个岗位的回执，向用户按四行交付：做完了什么 / 已知边界 / 工作区状态 / 风险与下一步；验收结论必须来自评审或 QA。';
+    var back = data.returnEdges.filter(function (e) { return e.from === r.id; })[0];
+    return back ? back.carries + '。' : '—';
+  }
+  function mountedTools(r) {
+    var t = r.tools, out = [];
+    if (t.read) out.push('read');
+    if (t.search) out.push('search');
+    if (t.todo) out.push('todo');
+    if (t.bash || t.pwsh) out.push('跑命令（bash / pwsh）');
+    if (t.write && t.edit) out.push('write + edit');
+    else { if (t.write) out.push('write'); if (t.edit) out.push('edit'); }
+    if (t.web) out.push('web');
+    if (t.jobs) out.push('jobs');
+    if (t.subagent) out.push('subagent');
+    if (t.askUser) out.push('ask-user');
+    if (t.present) out.push('present');
+    if (t.goal) out.push('goal');
+    if (t.office) out.push('office');
+    return out;
+  }
+  function renderDetail() {
+    var r = state.selected ? roleById.get(state.selected) : null;
+    var title = $('#detail-title');
+    var chips = $('#detail-chips');
+    var summary = $('#detail-summary');
+    var body = $('#detail-body');
+    if (!r) {
+      title.textContent = '岗位详情';
+      chips.innerHTML = '';
+      summary.textContent = '';
+      body.innerHTML = '<div class="detail-empty"><p class="empty-mark">空态</p><p>没有选中任何岗位。</p>' +
+        '<p class="dim">点任意角色卡，或按 Tab 到卡片后回车；按 Esc 可回到空态。</p></div>';
+      return;
+    }
+    title.textContent = shortName(r);
+    var chipList = ['<span class="chip chip-preset">preset <code>' + esc(r.id) + '</code></span>',
+      '<span class="chip">order ' + r.order + '</span>'];
+    if (r.isRoot) chipList.push('<span class="chip chip-root">根 · 唯一 hub</span>');
+    if (r.gate !== '—') chipList.push('<span class="chip chip-gate">闸门·' + (r.gate === '评审' ? '写对了吗' : '做对了吗') + '</span>');
+    chipList.push(r.tools.write ? '<span class="chip">可写 · write/edit</span>' : '<span class="chip chip-ro">只读 · 无 write/edit</span>');
+    if (r.tools.web) chipList.push('<span class="chip">联网</span>');
+    if (r.tools.subagent) chipList.push('<span class="chip">可派工</span>');
+    chips.innerHTML = chipList.join('');
+    summary.textContent = r.summary;
+    body.innerHTML =
+      '<dl class="detail-rows">' +
+        '<div class="row"><dt>能做</dt><dd><ul>' + r.doList.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul></dd></div>' +
+        '<div class="row"><dt>不做</dt><dd><ul>' + r.dontList.map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul></dd></div>' +
+        '<div class="row"><dt>和隔壁</dt><dd>' + esc(neighborText(r)) + '</dd></div>' +
+        '<div class="row"><dt>交什么</dt><dd>' + esc(delivers(r)) + '</dd></div>' +
+        '<div class="row"><dt>挂载工具：</dt><dd><span class="tools-line">' + mountedTools(r).join(' / ') +
+          '</span> <span class="tools-off">· apply_patch：关闭（7/7）</span>' +
+          '<span class="tools-off">· tool-skill / skill-filesystem：7/7 挂载（未单列）</span></dd></div>' +
+        '<div class="row boundary"><dt>边界的真实含义</dt><dd>' + esc(boundaryText(r)) + '</dd></div>' +
+      '</dl>' +
+      '<div class="refs"><span class="label">出处</span>' + r.sourceRefs.map(badge).join('') +
+        '<span class="dim" style="margin-left:6px">规程 <code>' + esc(r.skillPath) + '</code></span></div>';
+  }
+  function applySelection(id, opts) {
+    opts = opts || {};
+    if (!opts.keepNotice) { var nbox = $('#notice'); if (nbox) nbox.hidden = true; }
+    state.selected = id || null;
+    if (id) html.setAttribute('data-selected', id);
+    else html.removeAttribute('data-selected');
+    $$('#star .role-card').forEach(function (btn) {
+      btn.setAttribute('aria-pressed', btn.getAttribute('data-role-node') === id ? 'true' : 'false');
+    });
+    $$('#matrix tbody tr[data-role-row]').forEach(function (tr) {
+      if (tr.getAttribute('data-role-row') === id) tr.setAttribute('aria-current', 'true');
+      else tr.removeAttribute('aria-current');
+    });
+    renderDetail();
+    if (opts.hash) {
+      var url = id ? '#role-' + id : location.pathname + location.search;
+      try { history.replaceState(null, '', url); } catch (e) { /* file:// is fine too */ }
+    }
+  }
+
+  /* ---------------- matrix ---------------- */
+  var COLS = [
+    { key: 'write', label: '写文件', sem: 'write' },
+    { key: 'edit', label: '改文件', sem: 'edit' },
+    { key: 'web', label: '联网', sem: null },
+    { key: 'run', label: '跑命令', sem: 'bash' },
+    { key: 'subagent', label: '派工', sem: 'subagent' },
+    { key: 'jobs', label: '后台任务', sem: 'jobs' },
+    { key: 'askUser', label: '问用户', sem: 'askUser' },
+    { key: 'present', label: '交付', sem: 'present' },
+    { key: 'goal', label: '目标', sem: 'goal' },
+    { key: 'office', label: 'Office', sem: 'office' },
+    { key: 'read', label: '读文件', sem: 'read' },
+    { key: 'search', label: '搜文件', sem: 'search' },
+    { key: 'todo', label: '待办', sem: 'todo' }
+  ];
+  function colValue(r, key) {
+    if (key === 'run') return !!(r.tools.bash || r.tools.pwsh);
+    return !!r.tools[key];
+  }
+  function renderMatrix() {
+    var head = '<thead><tr><th scope="col" class="rowhead">岗位</th>' + COLS.map(function (c) {
+      var lbl = c.key === 'jobs'
+        ? '<span class="lbl-full">后台任务</span><span class="lbl-short">后台</span>'
+        : esc(c.label);
+      var tip = c.sem && ts[c.sem] ? ts[c.sem] : (c.label + '：' + roles.filter(function (r) { return colValue(r, c.key); }).length + '/' + roles.length + ' 个 preset 挂载');
+      return '<th scope="col" title="' + esc(tip) + '"' + (c.key === 'jobs' ? ' aria-label="后台任务"' : '') + '>' + lbl + '</th>';
+    }).join('') + '</tr></thead>';
+    var body = '<tbody>' + roles.map(function (r) {
+      var cells = COLS.map(function (c) {
+        var v = colValue(r, c.key);
+        return '<td class="' + (v ? 'yes' : 'no') + '" title="' + esc(r.role + ' · ' + c.label + '：' + (v ? '挂载' : '未挂载')) + '">' +
+          '<span class="mk" aria-hidden="true">' + (v ? '✓' : '—') + '</span><span class="sr-only">' + (v ? '挂载' : '未挂载') + '</span></td>';
+      }).join('');
+      return '<tr data-role-row="' + r.id + '" tabindex="0" aria-label="' + esc(r.role) + ' 的工具边界行">' +
+        '<th scope="row" class="rowhead" title="' + esc(r.role) + '" aria-label="' + esc(r.role) + '"><svg class="icon row-icon" aria-hidden="true"><use href="#' + (ICON[r.id] || 'i-lock') + '"></use></svg><span aria-hidden="true">' + esc(r.role) + '</span></th>' +
+        cells + '</tr>';
+    }).join('\n') + '</tbody>';
+    $('#matrix').innerHTML = head + body;
+    $('#matrix-count').textContent = roles.length + ' 岗位 × ' + (COLS.length + 1) + ' 列';
+    $('#matrix-foot').innerHTML = '列序按判别力：写 / 改 / 联网 / 跑命令 / 派工在前，读 / 搜 / 待办 7/7 全有、放最后。跑命令：macOS/Linux 用 bash，Windows 用 pwsh；' +
+      roles.length + '/' + roles.length + ' 的 apply_patch 均关闭；tool-skill / skill-filesystem：7/7 挂载（未单列）。 ' + badge(lineOf(ts.applyPatch));
+  }
+  function renderToolNotes() {
+    var labels = {
+      bash: 'bash 跑命令', pwsh: 'pwsh 跑命令', read: '读文件', write: '写文件', edit: '改文件',
+      applyPatch: 'apply_patch', search: '搜文件', jobs: '后台任务', todo: '待办',
+      askUser: '问用户', present: '交付', goal: '/goal', office: 'Office', subagent: '派工'
+    };
+    var rows = Object.keys(ts).map(function (k) {
+      return '<dt>' + esc(labels[k] || k) + '</dt><dd>' + esc(ts[k]) + '</dd>';
+    }).join('');
+    rows += Object.keys(meta.disabledTools).map(function (k) {
+      return '<dt>' + esc(k) + '</dt><dd>✕ ' + esc(meta.disabledTools[k]) + '</dd>';
+    }).join('');
+    $('#tool-notes').innerHTML = rows;
+  }
+
+  /* ---------------- simulation ---------------- */
+  var PHASE_LABEL = { idle: '待机', armed: '已装填', running: '运行中', done: '已完成' };
+  function simScenario() { return data.scenarios.filter(function (s) { return s.id === state.sim.id; })[0] || null; }
+  function gateCount(s) {
+    var seen = {};
+    s.steps.forEach(function (st) { if (st.preset === 'cto-reviewer' || st.preset === 'cto-qa') seen[st.preset] = true; });
+    return Object.keys(seen).length;
+  }
+  function logLine(st, k) {
+    var r = roleById.get(st.preset);
+    var par = st.parallelWith ? '（与' + (roleById.get(st.parallelWith) ? roleById.get(st.parallelWith).role : st.parallelWith) + '并行）' : '';
+    return '第 ' + k + ' 拍 · ' + (r ? r.role : st.preset) + '：' + st.action + ' → ' + st.output + par;
+  }
+  function beatsOf(s) {
+    var beats = [];
+    s.steps.forEach(function (st) {
+      var last = beats[beats.length - 1];
+      if (last && st.parallelWith && last.some(function (x) { return x.preset === st.parallelWith; })) last.push(st);
+      else beats.push([st]);
+    });
+    return beats;
+  }
+  function litSet(s) {
+    if (state.sim.phase === 'done') return new Set(s.participants);
+    var set = new Set();
+    if (state.sim.phase === 'running') {
+      beatsOf(s).slice(0, state.sim.tick).forEach(function (beat) {
+        beat.forEach(function (st) { set.add(st.preset); });
+      });
+    }
+    return set;
+  }
+  function renderScenarios() {
+    $('#scenario-list').innerHTML = data.scenarios.map(function (s) {
+      return '<button type="button" class="scenario" data-scenario="' + s.id + '" aria-pressed="' + (s.id === state.sim.id ? 'true' : 'false') + '">' +
+        '<span class="scenario-title">' + esc(s.title) + (s.inferred ? ' <span class="badge-infer">推断</span>' : '') + '</span>' +
+        '<span class="scenario-when">' + esc(s.when) + '</span>' +
+        '<span class="scenario-meta">' + s.participants.length + ' 人 · ' + s.cardCount + ' 卡 · ' + gateCount(s) + ' 道闸' + (s.parallelizable ? ' · 可并行' : '') + '</span>' +
+        '</button>';
+    }).join('');
+  }
+  function syncScenarioPressed() {
+    $$('#scenario-list .scenario').forEach(function (btn) {
+      btn.setAttribute('aria-pressed', btn.getAttribute('data-scenario') === state.sim.id ? 'true' : 'false');
+    });
+  }
+  function renderStage() {
+    var s = simScenario();
+    var phase = state.sim.phase;
+    $('#stage-phase').textContent = PHASE_LABEL[phase];
+    $('#stage-phase').setAttribute('data-phase', phase);
+    $('#stage-title').textContent = s ? s.title : '待机';
+    var countsEl = $('#stage-counts');
+    if (!s) countsEl.textContent = '从左侧选一个场景开始。';
+    else if (phase === 'idle') countsEl.textContent = '已选场景：' + s.title + '。';
+    else countsEl.textContent = '预计 ' + s.participants.length + ' 人 · ' + s.cardCount + ' 卡 · ' + gateCount(s) + ' 道闸';
+    var lit = s ? litSet(s) : new Set();
+    $('#sim-chips').innerHTML = s ? s.participants.map(function (p) {
+      var r = roleById.get(p);
+      var icon = r ? ICON[r.id] : 'i-lock';
+      return '<span class="sim-chip' + (lit.has(p) ? ' is-lit' : '') + '">' +
+        '<svg class="icon" aria-hidden="true"><use href="#' + icon + '"></use></svg><span>' + esc(r ? r.role : p) + '</span></span>';
+    }).join('') : '<span class="dim" style="font-size:11.5px">尚未装填场景</span>';
+    $('#sim-log').innerHTML = state.sim.log.map(function (x) {
+      return '<li' + (x.cls ? ' class="' + x.cls + '"' : '') + '>' + esc(x.text) + '</li>';
+    }).join('');
+    $('#stage-basis').innerHTML = s ? '依据：' + esc(s.basis) +
+      (gateCount(s) === 2 ? '；' + esc(meta.gate.twoCardNote) : '') : '';
+    $('#sim-start').disabled = !(s && phase === 'armed');
+    $('#sim-stop').disabled = !(s && phase === 'running');
+    $('#sim-replay').disabled = !(s && phase === 'done');
+  }
+  function armSim(id) {
+    window.clearInterval(state.sim.timer);
+    state.sim = { id: id, phase: 'armed', tick: 0, timer: null, log: [] };
+    var s = simScenario();
+    syncScenarioPressed();
+    renderStage();
+    announce('已装填「' + s.title + '」：预计 ' + s.participants.length + ' 人 · ' + s.cardCount + ' 卡 · ' + gateCount(s) + ' 道闸');
+  }
+  function tickSim() {
+    var s = simScenario();
+    if (!s) return;
+    var beats = beatsOf(s);
+    if (state.sim.tick >= beats.length) { finishSim(); return; }
+    var beat = beats[state.sim.tick];
+    state.sim.tick += 1;
+    beat.forEach(function (st) { state.sim.log.push({ text: logLine(st, state.sim.tick) }); });
+    renderStage();
+    announce('第 ' + state.sim.tick + ' 拍：' + beat.map(function (st) {
+      var r = roleById.get(st.preset);
+      return r ? r.role : st.preset;
+    }).join('、'));
+  }
+  function finishSim() {
+    window.clearInterval(state.sim.timer);
+    state.sim.timer = null;
+    var s = simScenario();
+    if (!s) return;
+    state.sim.phase = 'done';
+    state.sim.log.push({ text: '预演结论：' + s.gate + '；本次 ' + gateCount(s) + ' 道闸，回执给 CTO。仅演示顺序，不代表真实执行。', cls: 'log-conclusion' });
+    renderStage();
+    announce('预演完成：' + s.title);
+  }
+  function startSim() {
+    var s = simScenario();
+    if (!s || state.sim.phase === 'running') return;
+    window.clearInterval(state.sim.timer);
+    state.sim.phase = 'running';
+    state.sim.tick = 0;
+    state.sim.log = [];
+    syncScenarioPressed();
+    renderStage();
+    announce('开始预演：' + s.title);
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      var beats = beatsOf(s);
+      state.sim.tick = beats.length;
+      state.sim.log = [];
+      beats.forEach(function (beat, i) {
+        beat.forEach(function (st) { state.sim.log.push({ text: logLine(st, i + 1) }); });
+      });
+      finishSim();
+      return;
+    }
+    tickSim();
+    state.sim.timer = window.setInterval(tickSim, 950);
+  }
+  function stopSim() {
+    if (state.sim.phase !== 'running') return;
+    window.clearInterval(state.sim.timer);
+    state.sim.timer = null;
+    state.sim.phase = 'armed';
+    state.sim.log.push({ text: '已停止：本次预演中断，可重新开始。' });
+    renderStage();
+    announce('预演已停止');
+  }
+
+  /* ---------------- rules / footer ---------------- */
+  function renderRules() {
+    var b = data.boundaries;
+    $('#rules').innerHTML = b.ironRules.map(function (x) {
+      return '<li><span class="rule-no">' + String(x.no).padStart(2, '0') + '</span><span>' + esc(x.text) + '</span></li>';
+    }).join('');
+    function plain(list, never) {
+      return list.map(function (x) {
+        return '<li' + (never ? ' class="never"' : '') + '><span class="bullet">' + (never ? '✕' : '·') + '</span><span>' + esc(x.text) + '</span></li>';
+      }).join('');
+    }
+    $('#limits').innerHTML = plain(b.knownLimits, false);
+    $('#platform').innerHTML = plain(b.platform, false);
+    $('#never').innerHTML = b.neverHappens.map(function (x) {
+      return '<li class="never"><span class="bullet">✕</span><span>' + esc(x) + '</span></li>';
+    }).join('');
+    $('#never-ref').innerHTML = '配置层证据：' + badge(lineOf(ts.applyPatch)) + ' ' + badge(lineOf(meta.disabledTools.subagent_fork));
+    $('#footer-meta').innerHTML = '根 preset：<code>' + esc(rootRole.id) + '</code> · bundle <code>' + esc(meta.bundle) +
+      '</code> · 事实来源 <code>' + esc(meta.sourceFile) + '</code>（' + meta.sourceLines + ' 行）· ' +
+      counts.presets + ' presets / ' + counts.posts + ' posts';
+    var prov = meta.provenance || {};
+    var provEl = $('#footer-prov');
+    if (provEl && prov.sha256Short) {
+      provEl.innerHTML = '数据同步自 <code>' + esc(meta.sourceFile) + '</code> · sha256 <code>' + esc(prov.sha256Short) +
+        '</code> · script <code>' + esc(prov.script) + '</code> · ' + meta.sourceLines +
+        ' 行 · 由 <code>--check</code> 校验';
+      provEl.title = '行号随 patch 变动，以 npm run check 为准';
+    }
+  }
+
+  /* ---------------- deep links ---------------- */
+  function showNotice(msg) {
+    var box = $('#notice'), txt = $('#notice-text');
+    if (!box.hidden && txt.textContent === msg) return;
+    txt.textContent = msg;
+    box.hidden = false;
+    announce(msg);
+  }
+  function handleHash() {
+    var raw = location.hash.replace(/^#/, '');
+    if (!raw) return;
+    var original = location.hash;
+    var hash = raw;
+    try { hash = decodeURIComponent(raw); } catch (e) { hash = raw; }
+    if (hash.indexOf('role-') === 0) {
+      var id = hash.slice(5);
+      if (roleById.has(id)) { applySelection(id); return; }
+      fallbackHash('角色', original);
+      return;
+    }
+    if (hash.indexOf('sec-') === 0) {
+      var section = document.getElementById(hash);
+      if (section) { section.scrollIntoView({ block: 'start' }); return; }
+      fallbackHash('区块', original);
+      return;
+    }
+    fallbackHash('锚点', original);
+  }
+  function fallbackHash(kind, original) {
+    applySelection(rootRole.id, { hash: true, keepNotice: true });
+    showNotice('链接里的' + kind + ' ' + original + ' 不存在，已回到 ' + rootRole.id + '。');
+    var top = document.getElementById('sec-topology');
+    if (top) top.scrollIntoView({ block: 'start' });
+  }
+
+  /* ---------------- wire ---------------- */
+  function wire() {
+    var star = $('#star');
+    star.addEventListener('click', function (e) {
+      var btn = e.target.closest('[data-role-node]');
+      if (!btn) return;
+      var id = btn.getAttribute('data-role-node');
+      applySelection(id, { hash: true });
+      announce('已选中 ' + shortName(roleById.get(id)) + '。按 Esc 回到空态。');
+    });
+    star.addEventListener('mouseover', function (e) {
+      var btn = e.target.closest('[data-role-node]');
+      if (btn) setHover(btn.getAttribute('data-role-node'));
+    });
+    star.addEventListener('mouseleave', function () { setHover(null); });
+    star.addEventListener('focusin', function (e) {
+      var btn = e.target.closest('[data-role-node]');
+      if (btn) setHover(btn.getAttribute('data-role-node'));
+    });
+    star.addEventListener('focusout', function (e) {
+      if (!star.contains(e.relatedTarget)) setHover(null);
+    });
+
+    var matrix = $('#matrix');
+    matrix.addEventListener('mouseover', function (e) {
+      var tr = e.target.closest('tr[data-role-row]');
+      if (tr) setHover(tr.getAttribute('data-role-row'));
+    });
+    matrix.addEventListener('mouseleave', function () { setHover(null); });
+    matrix.addEventListener('focusin', function (e) {
+      var tr = e.target.closest('tr[data-role-row]');
+      if (tr) setHover(tr.getAttribute('data-role-row'));
+    });
+    matrix.addEventListener('focusout', function (e) {
+      if (!matrix.contains(e.relatedTarget)) setHover(null);
+    });
+
+    $('#step-body').addEventListener('click', function (e) {
+      var chip = e.target.closest('[data-goto-step]');
+      if (!chip) return;
+      goStep(Number(chip.getAttribute('data-goto-step')));
+      var target = $('#step-track button[data-step="' + chip.getAttribute('data-goto-step') + '"]');
+      if (target) target.focus();
+    });
+    $('#step-prev').addEventListener('click', function () { goStep(state.step - 1); });
+    $('#step-next').addEventListener('click', function () { goStep(state.step + 1); });
+    $('#step-reset').addEventListener('click', function () {
+      if (state.step === 0) { announce('已经是第 1 步'); return; }
+      state.step = 0;
+      renderStep();
+      announce('已重置到第 1 步：' + data.steps[0].name);
+    });
+    var rz;
+    window.addEventListener('resize', function () { clearTimeout(rz); rz = setTimeout(drawStepLoop, 120); });
+    $('#step-track').addEventListener('click', function (e) {
+      var btn = e.target.closest('[data-step]');
+      if (!btn) return;
+      goStep(Number(btn.getAttribute('data-step')));
+    });
+    var stepper = $('#stepper');
+    stepper.addEventListener('keydown', function (e) {
+      if (e.key === 'ArrowRight') { e.preventDefault(); goStep(state.step + 1); }
+      else if (e.key === 'ArrowLeft') { e.preventDefault(); goStep(state.step - 1); }
+    });
+
+    $('#scenario-list').addEventListener('click', function (e) {
+      var btn = e.target.closest('[data-scenario]');
+      if (btn) armSim(btn.getAttribute('data-scenario'));
+    });
+    $('#sim-start').addEventListener('click', startSim);
+    $('#sim-stop').addEventListener('click', stopSim);
+    $('#sim-replay').addEventListener('click', startSim);
+
+    document.addEventListener('keydown', function (e) {
+      if (e.key !== 'Escape') return;
+      if (state.sim.phase === 'running') { stopSim(); return; }
+      if (state.selected) {
+        var focused = document.activeElement;
+        applySelection(null, { hash: true });
+        if (focused && focused.focus) focused.focus();
+        announce('已取消选择，回到空态；焦点仍在原卡。');
+      } else {
+        var nbox2 = $('#notice');
+        if (nbox2) nbox2.hidden = true;
+      }
+    });
+    $('#notice-close').addEventListener('click', function () { $('#notice').hidden = true; });
+
+    var scroller = $('#matrix-scroll');
+    function syncFade() {
+      var wrap = $('#matrix-wrap');
+      var atEnd = scroller.scrollLeft + scroller.clientWidth >= scroller.scrollWidth - 2;
+      wrap.setAttribute('data-at-end', atEnd ? 'true' : 'false');
+      var panel = document.getElementById('sec-matrix');
+      if (panel) panel.setAttribute('data-overflow', scroller.scrollWidth > scroller.clientWidth + 2 ? 'true' : 'false');
+    }
+    scroller.addEventListener('scroll', syncFade, { passive: true });
+    window.addEventListener('resize', syncFade);
+    syncFade();
+
+    var navLinks = $$('.toc a');
+    var pairs = navLinks.map(function (a) {
+      return { a: a, el: document.querySelector(a.getAttribute('href')) };
+    }).filter(function (p) { return p.el; });
+    if ('IntersectionObserver' in window) {
+      var visible = new Set();
+      var io = new IntersectionObserver(function (entries) {
+        entries.forEach(function (entry) {
+          if (entry.isIntersecting) visible.add(entry.target);
+          else visible.delete(entry.target);
+        });
+        var current = pairs.filter(function (p) { return visible.has(p.el); })[0];
+        pairs.forEach(function (p) {
+          if (current && p === current) p.a.setAttribute('aria-current', 'location');
+          else p.a.removeAttribute('aria-current');
+        });
+      }, { rootMargin: '-80px 0px -52% 0px', threshold: 0 });
+      pairs.forEach(function (p) { io.observe(p.el); });
+    }
+
+    window.addEventListener('hashchange', handleHash);
+  }
+
+  /* ---------------- boot ---------------- */
+  function safe(label, fn) {
+    try {
+      fn();
+    } catch (err) {
+      bootIssues.push(label + '：' + (err && err.message ? err.message : String(err)));
+    }
+  }
+  function scrollToTarget() {
+    var h = location.hash;
+    if (h.indexOf('#role-') === 0) {
+      var top = document.getElementById('sec-topology');
+      if (top) top.scrollIntoView({ block: 'start' });
+    } else if (h.indexOf('#sec-') === 0) {
+      var target = document.getElementById(h.slice(1));
+      if (target) target.scrollIntoView({ block: 'start' });
+    }
+  }
+  try {
+    safe('页头', renderMeta);
+    safe('汇总卡', renderQuick);
+    safe('闸门说明', renderGateNote);
+    safe('六步流程', function () { buildStepTrack(); renderStep(); });
+    safe('角色拓扑', renderStar);
+    safe('工具矩阵', renderMatrix);
+    safe('工具注释', renderToolNotes);
+    safe('场景列表', renderScenarios);
+    safe('铁律与边界', renderRules);
+    safe('默认选中', function () { applySelection(rootRole.id); });
+    safe('模拟面板', renderStage);
+    safe('交互绑定', wire);
+    safe('深链', handleHash);
+    var issue = bootIssues[0] || (data.issues && data.issues[0]);
+    if (issue) showNotice('页面数据不完整：' + issue);
+    scrollToTarget();
+    window.setTimeout(scrollToTarget, 0);
+  } catch (err) {
+    try {
+      showNotice('页面数据不完整：' + (err && err.message ? err.message : String(err)));
+    } catch (ignore) { /* notice box unavailable */ }
+  }
+})();
+</script>
+</body>
+</html>
