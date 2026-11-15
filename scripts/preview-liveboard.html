@@ -5,19 +5,50 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>办公室信息流 · 真组件 harness</title>
 <style>
-  :root{color-scheme:dark}
+  /* 宿主主题层：照 DSH 的结构模拟——浅色是 body 默认（不加属性），深色靠 body[data-ds-dark-theme]，
+     取值来自 packages/client/ui-theme/src/styles/design-platform.css 的静态色板。 */
   *{box-sizing:border-box}
-  body{margin:0;background:#05080b;color:#e8eef4;font:13px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif}
-  .pv-bar{display:flex;flex-wrap:wrap;gap:6px;padding:10px 12px;border-bottom:1px solid #232c37;background:#0d141b;align-items:center}
-  .pv-bar button{appearance:none;border:1px solid #33404e;background:#101922;color:#94a3b2;border-radius:6px;padding:5px 10px;font:12px inherit;cursor:pointer}
-  .pv-bar button[aria-pressed="true"]{border-color:#5ac8fa;color:#5ac8fa;background:rgba(90,200,250,.1)}
-  .pv-bar code{margin-left:auto;color:#6f8090;font:11px ui-monospace,Menlo,monospace}
-  .pv-note{padding:6px 12px;color:#6f8090;font-size:11px;border-bottom:1px solid #232c37}
-  .pv-note b{color:#f2c66d;font-weight:600}
+  body{
+    margin:0;font:13px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+    --dsw-alias-bg-base:rgb(255,255,255);
+    --dsw-alias-bg-layer-1:rgb(255,255,255);
+    --dsw-alias-bg-layer-2:rgb(255,255,255);
+    --dsw-alias-label-primary:rgb(15,17,21);
+    --dsw-alias-label-secondary:rgb(97,102,107);
+    --dsw-alias-label-tertiary:rgb(129,133,140);
+    --dsw-alias-border-l2:rgba(0,0,0,.10);
+    --dsw-alias-border-l3:rgba(0,0,0,.12);
+    --dsw-alias-brand-primary-new-colorprimary-new-color:rgb(65,118,230);
+    --dsw-alias-state-success-primary:rgb(34,197,94);
+    --dsw-alias-state-warn-primary:rgb(245,158,11);
+    --dsw-alias-state-error-primary:rgb(236,19,19);
+    background:var(--dsw-alias-bg-base);color:var(--dsw-alias-label-primary)
+  }
+  body[data-ds-dark-theme]{
+    --dsw-alias-bg-base:rgb(21,21,23);
+    --dsw-alias-bg-layer-1:rgb(35,35,36);
+    --dsw-alias-bg-layer-2:rgb(44,44,46);
+    --dsw-alias-label-primary:rgb(249,250,251);
+    --dsw-alias-label-secondary:rgb(207,211,214);
+    --dsw-alias-label-tertiary:rgb(173,178,184);
+    --dsw-alias-border-l2:rgba(255,255,255,.12);
+    --dsw-alias-border-l3:rgba(255,255,255,.16);
+    --dsw-alias-brand-primary-new-colorprimary-new-color:rgb(86,134,254);
+    --dsw-alias-state-success-primary:rgb(34,197,94);
+    --dsw-alias-state-warn-primary:rgb(245,158,11);
+    --dsw-alias-state-error-primary:rgb(242,90,90)
+  }
+  .pv-bar{display:flex;flex-wrap:wrap;gap:6px;padding:10px 12px;border-bottom:1px solid var(--dsw-alias-border-l2);background:var(--dsw-alias-bg-layer-1);align-items:center}
+  .pv-bar button{appearance:none;border:1px solid var(--dsw-alias-border-l3);background:transparent;color:var(--dsw-alias-label-secondary);border-radius:6px;padding:5px 10px;font:12px inherit;cursor:pointer}
+  .pv-bar button[aria-pressed="true"]{border-color:var(--dsw-alias-brand-primary-new-colorprimary-new-color);color:var(--dsw-alias-brand-primary-new-colorprimary-new-color);background:color-mix(in srgb,var(--dsw-alias-brand-primary-new-colorprimary-new-color) 10%,transparent)}
+  .pv-bar button[data-theme]{font-family:ui-monospace,Menlo,monospace;font-size:11px}
+  .pv-bar code{margin-left:auto;color:var(--dsw-alias-label-tertiary);font:11px ui-monospace,Menlo,monospace}
+  .pv-note{padding:6px 12px;color:var(--dsw-alias-label-tertiary);font-size:11px;border-bottom:1px solid var(--dsw-alias-border-l2)}
+  .pv-note b{color:var(--dsw-alias-state-warn-primary);font-weight:600}
   .pv-wrap{display:flex;justify-content:center;padding:16px}
-  .pv-frame{width:420px;height:720px;border:1px solid #232c37;border-radius:10px;overflow:hidden}
+  .pv-frame{width:420px;height:720px;border:1px solid var(--dsw-alias-border-l2);border-radius:10px;overflow:hidden;background:var(--dsw-alias-bg-base)}
   #host{height:100%}
-  .pv-out{margin:0 12px 16px;padding:8px 10px;border:1px solid #232c37;border-radius:8px;background:#0b1016;font:11px/1.5 ui-monospace,Menlo,monospace;color:#94a3b2;white-space:pre-wrap;max-height:240px;overflow:auto}
+  .pv-out{margin:0 12px 16px;padding:8px 10px;border:1px solid var(--dsw-alias-border-l2);border-radius:8px;background:var(--dsw-alias-bg-layer-1);font:11px/1.5 ui-monospace,Menlo,monospace;color:var(--dsw-alias-label-secondary);white-space:pre-wrap;max-height:240px;overflow:auto}
 </style>
 </head>
 <body>
@@ -32,10 +63,12 @@
   <button type="button" data-scenario="retain-peak" aria-pressed="false">retain-peak</button>
   <button type="button" data-scenario="privacy" aria-pressed="false">privacy</button>
   <button type="button" data-scenario="crash" aria-pressed="false">crash</button>
+  <button type="button" data-scenario="theme-light" data-theme="light" aria-pressed="false">theme-light</button>
+  <button type="button" data-scenario="theme-dark" data-theme="dark" aria-pressed="false">theme-dark</button>
   <button type="button" id="pv-all">跑全部 + 断言</button>
   <code>真组件 · scripts/preview-liveboard.html</code>
 </div>
-<p class="pv-note">本页加载<b>真实 client.js</b>（不是手写 mock）：桩 <code>window.__ModuleLoader__</code> + 最小 ctx，React 取自仓库 <code>node_modules</code>。
+<p class="pv-note">主题场景（theme-light / theme-dark）按 WCAG 2.1 AA 量：<code>&lt;14px</code> 文字 4.5、<code>≥18px</code> 或粗体 3.0、非文字 UI 3.0；焦点环<b>只断言 CSS 规则</b>（<code>focusMode:"css-rule"</code>），真实 Tab 态由 CDP <code>Input.dispatchKeyEvent</code> 在外部脚本验。本页加载<b>真实 client.js</b>（不是手写 mock）：桩 <code>window.__ModuleLoader__</code> + 最小 ctx，React 取自仓库 <code>node_modules</code>。
   <code>crash</code> 场景注入的是「宿主会话行坏掉」这类渲染期真抛错（没有兜底值可退）；坏时间戳不走兜底卡，<code>turnElapsed</code> 已被 <code>safe()</code> 兜成 <code>—</code>，由 <code>partial</code> 场景断言。
   崩溃口径按 <code>console.error()</code> 调用数计 1 条；React dev 构建捕获后还会把错误再 <code>throw</code> 到 window（多出 <code>Uncaught Error</code>），那是 dev-only，不算多记。
   <br>本页<b>证明不到</b>：① 真 Host 上 <code>sessions.retain</code> 的成功/失败与时序；② 真实会话事件的完整形状（这里只有本页构造的几种）；③ 宿主对 <code>sidebarRightTabs.register</code> 的壳校验与去重；④ 真实 <code>useProjection('subagentCatalog')</code> 的帧与空窗。它只证明渲染、降级与脱敏行为。</p>
@@ -623,6 +656,195 @@ window.__ModuleLoader__ = {
     return out
   }
 
+  /* ── 5.5 主题读数：算「有效背景」+ WCAG 对比度（浏览器给的是 rgb()/rgba()，透明层要合） ── */
+  function parseColor(str) {
+    var raw = String(str || '')
+    /* color-mix() 在计算值里会变成 color(srgb r g b / a)，只认 rgb() 会把它当解析失败 */
+    var cs = raw.match(/color\(srgb\s+([^)]+)\)/)
+    if (cs) {
+      var cp = cs[1].split(/[\/\s]+/).filter(function (x) { return x !== '' })
+      if (cp.length < 3) return null
+      var nums = cp.slice(0, 3).map(function (v) { return Math.round(parseFloat(v) * 255) })
+      if (nums.some(function (n) { return isNaN(n) })) return null
+      return { r: nums[0], g: nums[1], b: nums[2], a: cp.length > 3 ? parseFloat(cp[3]) : 1 }
+    }
+    var m = raw.match(/rgba?\(([^)]+)\)/)
+    if (!m) return null
+    var parts = m[1].split(/[,\s\/]+/).filter(function (x) { return x !== '' }).map(Number)
+    if (parts.length < 3 || parts.some(function (n) { return isNaN(n) })) return null
+    return { r: parts[0], g: parts[1], b: parts[2], a: parts.length > 3 ? parts[3] : 1 }
+  }
+  function over(fg, bg) {
+    var a = fg.a == null ? 1 : fg.a
+    return { r: fg.r * a + bg.r * (1 - a), g: fg.g * a + bg.g * (1 - a), b: fg.b * a + bg.b * (1 - a), a: 1 }
+  }
+  function relLum(c) {
+    function ch(v) { v = v / 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4) }
+    return 0.2126 * ch(c.r) + 0.7152 * ch(c.g) + 0.0722 * ch(c.b)
+  }
+  function ratioOf(a, b) {
+    var la = relLum(a), lb = relLum(b)
+    return Math.round(((Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05)) * 100) / 100
+  }
+  /* 从元素往上把半透明背景一层层合到不透明为止（.co-panel 一定有底色） */
+  function effectiveBg(el) {
+    var stack = []
+    var node = el
+    while (node && node.nodeType === 1) {
+      var c = parseColor(getComputedStyle(node).backgroundColor)
+      if (c && c.a > 0) { stack.push(c); if (c.a >= 1) break }
+      node = node.parentElement
+    }
+    var base = stack.length ? stack.pop() : { r: 255, g: 255, b: 255, a: 1 }
+    while (stack.length) base = over(stack.pop(), base)
+    return base
+  }
+  function cssRgb(c) { return 'rgb(' + [c.r, c.g, c.b].map(function (n) { return Math.round(n) }).join(', ') + ')' }
+  /* 焦点环读数：焦点是键盘给的（focusVisible），量 outline 三件套 + 环是否在裁切容器内 */
+  function focusRing(sel, clipSel) {
+    var el = document.querySelector(sel)
+    if (!el) return { sel: sel, missing: true }
+    try { el.focus({ focusVisible: true }) } catch (e) { el.focus() }
+    var cs = getComputedStyle(el)
+    var r = el.getBoundingClientRect()
+    var clip = clipSel ? document.querySelector(clipSel) : null
+    var w = parseFloat(cs.outlineWidth) || 0
+    var off = parseFloat(cs.outlineOffset) || 0
+    var box = { top: r.top - off - w, bottom: r.bottom + off + w, left: r.left - off - w, right: r.right + off + w }
+    var cr = clip ? clip.getBoundingClientRect() : null
+    return {
+      sel: sel,
+      focusVisible: el.matches(':focus-visible'),
+      isActive: document.activeElement === el,
+      outlineColor: cs.outlineColor,
+      outlineWidth: cs.outlineWidth,
+      outlineOffset: cs.outlineOffset,
+      ring: { top: Math.round(box.top), bottom: Math.round(box.bottom), left: Math.round(box.left), right: Math.round(box.right) },
+      clipRect: cr ? { top: Math.round(cr.top), bottom: Math.round(cr.bottom), left: Math.round(cr.left), right: Math.round(cr.right) } : null,
+      insideClip: cr ? (box.top >= cr.top - 0.5 && box.bottom <= cr.bottom + 0.5 && box.left >= cr.left - 0.5 && box.right <= cr.right + 0.5) : null
+    }
+  }
+
+  function pairOf(name, el) {
+    if (!el) return { name: name, missing: true }
+    var fg = parseColor(getComputedStyle(el).color)
+    var bg = effectiveBg(el)
+    var solid = fg && fg.a < 1 ? over(fg, bg) : fg
+    return { name: name, fg: cssRgb(solid), bg: cssRgb(bg), ratio: solid ? ratioOf(solid, bg) : null }
+  }
+
+  /* 主题读数口径（WCAG 2.1 AA）：
+   *   文字 <14px → 4.5；≥18px 或 ≥14px 且字重 ≥700 → 3.0；非文字 UI（环/点/边框）→ 3.0。
+   *   发丝分隔线（卡边框 list 背景那种 10% 透明线）按 1.4.11 的「纯装饰」豁免，只记录不断言。
+   * 焦点态不在 harness 里用脚本模拟（el.focus({focusVisible:true}) 在本机 Edge 是 no-op，模拟出来的
+   * 断言恒假也恒真过）：这里断言 CSS 规则本身（focusMode:"css-rule"），真实键盘态由
+   * CDP Input.dispatchKeyEvent 的外部脚本验，不在 harness 内。 */
+  function themeVarOf(name, host) {
+    var probe = document.createElement('span')
+    probe.style.color = 'var(' + name + ')'
+    host.appendChild(probe)
+    var c = getComputedStyle(probe).color
+    host.removeChild(probe)
+    return c
+  }
+  function focusRuleOf(sel, host) {
+    /* 面板样式是宿主注入的 <style>（也兼容 adoptedStyleSheets）。注意：`outline:2px solid var(--co-accent)`
+     * 这种带 var() 的简写 CSSOM 不会展开成 outlineWidth/outlineStyle，所以直接读规则文本自己解析。 */
+    var sheets = Array.prototype.slice.call(document.styleSheets)
+    ;(document.adoptedStyleSheets || []).forEach(function (sh) { if (sheets.indexOf(sh) < 0) sheets.push(sh) })
+    var text = null
+    var cssText = ''
+    for (var i = 0; i < sheets.length && !text; i++) {
+      var rules
+      try { rules = sheets[i].cssRules } catch (e) { continue }
+      for (var j = 0; j < (rules || []).length; j++) {
+        var r = rules[j]
+        if (!r.selectorText) continue
+        var hit = r.selectorText.split(',').some(function (x) { return x.trim() === sel })
+        if (!hit) continue
+        cssText = r.cssText || ''
+        text = cssText.slice(cssText.indexOf('{') + 1, cssText.lastIndexOf('}'))
+        break
+      }
+    }
+    if (!text) return { sel: sel, missing: true }
+    function decl(name) {
+      var m = text.match(new RegExp('(?:^|;)\\s*' + name + '\\s*:\\s*([^;]+)'))
+      return m ? m[1].trim() : ''
+    }
+    var shorthand = decl('outline')
+    var widthDecl = decl('outline-width')
+    var colorDecl = decl('outline-color')
+    var styleDecl = decl('outline-style')
+    if (shorthand) {
+      /* "2px solid var(--co-accent)" → 宽度/样式/颜色三段（颜色可能带空格，取剩余整段） */
+      var parts = shorthand.match(/^(?:([\d.]+px)\s+)?(solid|dashed|dotted|none)?\s*(.*)$/) || []
+      if (!widthDecl) widthDecl = parts[1] || ''
+      if (!styleDecl) styleDecl = parts[2] || ''
+      if (!colorDecl) colorDecl = (parts[3] || '').trim()
+    }
+    var out = { sel: sel, widthDecl: widthDecl, styleDecl: styleDecl, colorDecl: colorDecl, offset: decl('outline-offset') || '0px' }
+    /* 在**当前主题**下把 colorDecl 解析成 rgb：探针要有活的父节点才能拿到继承/自定义属性 */
+    var probe = document.createElement('div')
+    probe.style.outlineStyle = styleDecl || 'solid'
+    if (widthDecl) probe.style.outlineWidth = widthDecl
+    probe.style.outlineColor = colorDecl || 'currentColor'
+    host.appendChild(probe)
+    var cs = getComputedStyle(probe)
+    out.color = cs.outlineColor
+    out.width = cs.outlineWidth
+    host.removeChild(probe)
+    return out
+  }
+  function textNodesOf(root) {
+    var out = []
+    var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null)
+    var n = walker.nextNode()
+    while (n) {
+      var txt = String(n.nodeValue || '').replace(/\s+/g, ' ').trim()
+      var el = n.parentElement
+      if (txt && el && !el.closest('.co-sr')) {
+        var cs = getComputedStyle(el)
+        var r = el.getBoundingClientRect()
+        var shown = cs.display !== 'none' && cs.visibility !== 'hidden' && parseFloat(cs.opacity) > 0 && r.width > 0 && r.height > 0
+        if (shown) {
+          var bg = effectiveBg(el)
+          var fg0 = parseColor(cs.color)
+          var fg = fg0 && fg0.a < 1 ? over(fg0, bg) : fg0
+          var size = Math.round(parseFloat(cs.fontSize) * 10) / 10
+          var weight = parseInt(cs.fontWeight, 10) || 400
+          var need = (size >= 18 || (size >= 14 && weight >= 700)) ? 3 : 4.5
+          var ratio = fg ? ratioOf(fg, bg) : null
+          out.push({
+            cls: String(el.className || el.tagName.toLowerCase()),
+            text: txt.slice(0, 28),
+            size: size, weight: weight,
+            fg: fg ? cssRgb(fg) : null, bg: cssRgb(bg),
+            ratio: ratio, need: need,
+            pass: ratio != null && ratio >= need
+          })
+        }
+      }
+      n = walker.nextNode()
+    }
+    return out
+  }
+  /* 环外框是否被某个 overflow≠visible 的祖先裁掉：返回真正会裁的祖先（空数组 = 没被裁） */
+  function clippingAncestors(el, box) {
+    var out = []
+    var n = el.parentElement
+    while (n && n.nodeType === 1) {
+      var s = getComputedStyle(n)
+      if (s.overflowX !== 'visible' || s.overflowY !== 'visible') {
+        var r = n.getBoundingClientRect()
+        var fits = box.top >= r.top - 0.5 && box.bottom <= r.bottom + 0.5 && box.left >= r.left - 0.5 && box.right <= r.right + 0.5
+        out.push({ cls: String(n.className || n.tagName.toLowerCase()), clips: !fits })
+      }
+      n = n.parentElement
+    }
+    return out.filter(function (x) { return x.clips }).map(function (x) { return x.cls })
+  }
+
   function readings() {
     var panel = panelEl()
     var cards = Array.prototype.slice.call(document.querySelectorAll('.co-card'))
@@ -769,7 +991,10 @@ window.__ModuleLoader__ = {
       return originalError.apply(console, arguments)
     }
 
-    var sc = scene(name)
+    /* theme-light / theme-dark：数据用 live 的，只切宿主属性（不读缓存、不写死 color-scheme） */
+    var themeMode = name === 'theme-light' ? 'light' : (name === 'theme-dark' ? 'dark' : '')
+    if (themeMode) document.body.toggleAttribute('data-ds-dark-theme', themeMode === 'dark')
+    var sc = scene(themeMode ? 'live' : name)
     mount(sc)
     await wait(80)
 
@@ -822,6 +1047,154 @@ window.__ModuleLoader__ = {
     })
     report.chipFormsOk = narrowBad.length === 0 && wideBad.length === 0
     report.chipFormsBad = { narrow: narrowBad, wide: wideBad }
+
+    if (themeMode) {
+      /* 只量颜色（几何在 report.widths 里）。四块：
+       *   1) 面板级计算色（浅/深对应项必须不同）；2) 所有可见文字节点的对比度（按 WCAG 分档）；
+       *   3) 非文字 UI（环/点/当前步边框）≥3:1，发丝分隔线只记录；4) 焦点环走 CSS 规则断言。
+       * 注意：每次 mount 都会换掉整棵 DOM，任何元素引用都必须在 mount 之后重新 query，
+       * 否则量到的是脱挂节点（effectiveBg 会一路走到白色兜底，读数看着像「浅色」）。 */
+      var head = document.querySelector('.co-card[data-role="cto-office"] .co-card-head')
+      if (head) head.click()
+      await wait(90)
+      var panel = panelEl()
+      var card = document.querySelector('.co-card[data-role="cto-reviewer"]')
+      var chip = document.querySelector('.co-gate')
+      report.theme = {
+        mode: themeMode,
+        bodyAttr: document.body.hasAttribute('data-ds-dark-theme'),
+        panelBg: panel ? getComputedStyle(panel).backgroundColor : null,
+        cardBg: card ? getComputedStyle(card).backgroundColor : null,
+        cardBorder: card ? getComputedStyle(card).borderTopColor : null,
+        textColor: panel ? getComputedStyle(panel).color : null,
+        chipColor: chip ? getComputedStyle(chip).color : null,
+        panelColorScheme: panel ? getComputedStyle(panel).colorScheme : null,
+        accent: panel ? themeVarOf('--co-accent', panel) : null,
+        accentText: panel ? themeVarOf('--co-accent-text', panel) : null,
+        dim: panel ? themeVarOf('--co-dim', panel) : null
+      }
+      report.theme.expandedBg = (function () {
+        var body = document.querySelector('.co-body')
+        return body ? cssRgb(effectiveBg(body)) : null
+      })()
+
+      /* 1) 文字节点：全量逐条（含最小节点），按字号/字重分档判 4.5 / 3.0 */
+      var nodes = textNodesOf(panel || document.body)
+      var fails = nodes.filter(function (n) { return !n.pass })
+      var worst = nodes.slice().sort(function (a, b) { return (a.ratio || 0) - (b.ratio || 0) })[0] || null
+      report.theme.text = {
+        count: nodes.length,
+        nodes: nodes,
+        minTextRatio: worst ? worst.ratio : null,
+        minNode: worst,
+        fails: fails.map(function (n) { return { cls: n.cls, text: n.text, ratio: n.ratio, need: n.need } })
+      }
+
+      /* 2) 非文字 UI：颜色本身是唯一信号的（环 / 状态点 / 当前步边框）按 3:1；
+       *    发丝分隔线按 1.4.11 的纯装饰豁免，只记录不断言。 */
+      function uiColor(el, useBorder) {
+        if (!el) return null
+        var cs = getComputedStyle(el)
+        if (useBorder) return parseColor(cs.borderTopColor) || parseColor(cs.color)
+        var bgc = parseColor(cs.backgroundColor)
+        if (bgc && bgc.a > 0) return bgc
+        return parseColor(cs.borderTopColor) || parseColor(cs.color)
+      }
+      function uiPair(name, fgEl, bgEl, gated, useBorder) {
+        if (!fgEl || !bgEl) return { name: name, missing: true, gated: !!gated }
+        var bg = effectiveBg(bgEl)
+        var fg0 = uiColor(fgEl, useBorder)
+        var fg = fg0 && fg0.a < 1 ? over(fg0, bg) : fg0
+        var r = fg ? ratioOf(fg, bg) : null
+        return { name: name, fg: fg ? cssRgb(fg) : null, bg: cssRgb(bg), ratio: r, need: 3, gated: !!gated, pass: r != null && r >= 3 }
+      }
+      var dot = document.querySelector('.co-card[data-status="running"] .co-dot') ||
+        document.querySelector('.co-card[data-status="blocked"] .co-dot') ||
+        document.querySelector('.co-card .co-dot')
+      var curStep = document.querySelector('.co-step[aria-current="step"]')
+      var stepBox = curStep ? curStep.parentElement : null
+      var ringRule = focusRuleOf('.co-card-head:focus-visible', panel)
+      var ringBg = effectiveBg(card || panel)
+      var ringFg = parseColor(ringRule.color)
+      var uiAll = [
+        { name: '焦点环色/卡片底', fg: ringFg ? cssRgb(ringFg) : null, bg: cssRgb(ringBg),
+          ratio: ringFg ? ratioOf(ringFg, ringBg) : null, need: 3, gated: true,
+          pass: ringFg ? ratioOf(ringFg, ringBg) >= 3 : false },
+        uiPair('状态点/卡片底', dot, card, true),
+        uiPair('当前步边框/步进条底', curStep, stepBox, true, true),
+        uiPair('卡片发丝边框/列表底', card, panel, false, true),
+        uiPair('chip 边框/卡片底', chip, card, false, true)
+      ]
+      report.theme.ui = {
+        gated: uiAll.filter(function (u) { return u.gated }),
+        decorative: uiAll.filter(function (u) { return !u.gated }),
+        fails: uiAll.filter(function (u) { return u.gated && !u.pass }).map(function (u) { return u.name })
+      }
+
+      /* 3) 焦点环：只断言 CSS 规则（真键盘态在 harness 外验，见文件头说明） */
+      var stepRule = focusRuleOf('.co-step:focus-visible', panel)
+      var headEl = document.querySelector('.co-card[data-role="cto-office"] .co-card-head')
+      function ringBoxOf(el, rule) {
+        if (!el || !rule || rule.missing) return null
+        var r = el.getBoundingClientRect()
+        var w = parseFloat(rule.width) || 0
+        var off = parseFloat(rule.offset) || 0
+        return {
+          top: r.top - off - w, bottom: r.bottom + off + w,
+          left: r.left - off - w, right: r.right + off + w,
+          thicknessInside: off < 0 ? Math.min(w, -off) : 0
+        }
+      }
+      var headBox = ringBoxOf(headEl, ringRule) || { top: 0, bottom: 0, left: 0, right: 0, thicknessInside: 0 }
+      report.theme.focus = {
+        mode: 'css-rule',
+        rules: [
+          { sel: stepRule.sel, width: stepRule.width, offset: stepRule.offset, color: stepRule.color, colorDecl: stepRule.colorDecl, missing: !!stepRule.missing },
+          { sel: ringRule.sel, width: ringRule.width, offset: ringRule.offset, color: ringRule.color, colorDecl: ringRule.colorDecl, missing: !!ringRule.missing }
+        ],
+        accent: report.theme.accent,
+        ringBox: headBox,
+        clippedBy: headEl ? clippingAncestors(headEl, headBox) : null
+      }
+      /* 判据：两条规则都在、都是 2px 实线、offset 分别是 1px / -2px、
+       * 颜色都解析到本主题的 --co-accent、卡片头那条环整条落在卡内（不被 overflow:hidden 裁） */
+      report.theme.focus.ok = report.theme.focus.rules.every(function (r) {
+        if (r.missing) return false
+        if (r.width !== '2px') return false
+        return r.color === report.theme.accent
+      }) && stepRule.offset === '1px' && ringRule.offset === '-2px' &&
+        !!report.theme.focus.clippedBy && report.theme.focus.clippedBy.length === 0
+      report.theme.focusRings = report.theme.focus.rules
+
+      /* 4) 警示条：live 数据里没有条，临时挂 preset-fault 量（一挂载就有 warn 条）再挂回来。
+       *    前面的 dismiss 场景把「已关掉」写进 sessionStorage，换场景前先清掉，否则条不渲染。 */
+      try {
+        Object.keys(sessionStorage).forEach(function (k) {
+          if (k.indexOf('cto-office/feed-dismiss@1:') === 0) sessionStorage.removeItem(k)
+        })
+      } catch (e) {}
+      mount(scene('preset-fault'))
+      await wait(120)
+      report.theme.stripText = (function () {
+        var el = document.querySelector('.co-strip[data-tone="warn"]')
+        return el ? el.textContent.slice(0, 24) : null
+      })()
+      report.theme.stripRatio = pairOf('警示条文字/警示条底', document.querySelector('.co-strip[data-tone="warn"]'))
+      mount(scene(themeMode ? 'live' : name))
+      await wait(100)
+      report.theme.fits = report.widths.map(function (w) { return w.fits })
+
+      /* 量完把宿主属性还原成默认（浅色），否则后面接的 crash 场景会继承深色 */
+      document.body.removeAttribute('data-ds-dark-theme')
+      report.theme.fits = report.widths.map(function (w) { return w.fits })
+      report.theme.fitsOk = report.widths.every(function (w) { return w.fits })
+      report.theme.thresholds = { textSmall: 4.5, textLarge: 3, ui: 3 }
+      report.themeOk = report.theme.text.fails.length === 0 &&
+        report.theme.text.minTextRatio >= 4.5 &&
+        report.theme.ui.fails.length === 0 &&
+        report.theme.focus.ok === true &&
+        report.theme.fitsOk === true
+    }
 
     if (name === 'crash') {
       report.consoleErrorCount = errors.length
@@ -1108,8 +1481,16 @@ window.__ModuleLoader__ = {
         void frame.offsetWidth
         await wait(140)
         var rb = readings().rowBtn
+        /* 同一次换宽度里把 chip 文案也读走：≤359 必须是「! 3」（一个空格），600 是全称。
+         * 用 innerText：textContent 会把 display:none 的 .co-g-txt/.co-g-code 也算进去。 */
+        var chipEl = document.querySelector('.co-card[data-role="cto-reviewer"] .co-gate')
         report.rowBtnWidths.push({
           width: rbWidths[rw],
+          /* 逐 span 拼可见文本（不合并空白）：innerText 会把「!  3」的两个空格折成一个换行，
+           * 那样这版手里的双空格 bug 量不出来。display:none 的段要排除。 */
+          chip: chipEl ? Array.prototype.filter.call(chipEl.children, function (el) {
+            return getComputedStyle(el).display !== 'none'
+          }).map(function (el) { return el.textContent }).join('') : null,
           rows: rb.rows,
           clipped: rb.clipped,
           missing: rb.missing,
@@ -1129,6 +1510,13 @@ window.__ModuleLoader__ = {
       report.rowBtnOk = report.rowBtnWidths.length === 4 && report.rowBtnWidths.every(function (w) {
         return w.rows > 0 && w.missing === 0 && w.extra === 0
       })
+      /* 窄档 chip 形态按字符串判死：co-sym 的尾空格 + co-g-num 的数字，中间只能有一个空格。 */
+      report.chipNarrow = report.rowBtnWidths.filter(function (w) { return w.width <= 359 })
+        .map(function (w) { return { width: w.width, chip: w.chip } })
+      report.chipWide = (report.rowBtnWidths.filter(function (w) { return w.width >= 560 })[0] || {}).chip || null
+      report.chipNarrowOk = report.chipNarrow.length === 2 && report.chipNarrow.every(function (w) {
+        return w.chip === '! 3'
+      }) && report.chipWide === '! 要改 3 · CHANGES'
 
       /* 单条默认 3 行：展开 E 层后每条 data-full 都必须是 false，长的才有「展开全文」；
        * 点开只影响那一条（不是整片展开）。 */
@@ -1188,7 +1576,7 @@ window.__ModuleLoader__ = {
       report.opinionsOk = chipIsButton && String(report.opinionWideChip).indexOf('要改 3') >= 0 &&
         report.chipOpened.focusLayer === 'b' && report.chipOpened.opinions === 3 &&
         report.rawHiddenByDefault && afterRaw.rawEvents >= 4 && report.opinionOrderOk && report.longTextOk &&
-        report.rowExpandOk && report.receiptJumpOk && report.rowBtnOk
+        report.rowExpandOk && report.receiptJumpOk && report.rowBtnOk && report.chipNarrowOk
       /* 上面为了验 B 层一键落全文临时挂过 live；挂回本场景，后面的读数才是 review-opinions 的。 */
       mount(scene('review-opinions'))
       await wait(120)
@@ -1359,7 +1747,7 @@ window.__ModuleLoader__ = {
     log('handoff.id=' + handoff.id + ' sheets=' + JSON.stringify(sheetNames))
     log('module.inject=' + JSON.stringify(moduleInject))
     var reports = []
-    var names = ['live', 'ended', 'empty-window', 'window-partial', 'retain-fail', 'partial', 'preset-fault', 'offbook-preset', 'retain-peak', 'privacy', 'review-opinions', 'confirm', 'dismiss', 'crash']
+    var names = ['live', 'ended', 'empty-window', 'window-partial', 'retain-fail', 'partial', 'preset-fault', 'offbook-preset', 'retain-peak', 'privacy', 'review-opinions', 'confirm', 'dismiss', 'theme-light', 'theme-dark', 'crash']
     for (var i = 0; i < names.length; i += 1) {
       var report = await runScenario(names[i])
       reports.push(report)
@@ -1467,6 +1855,9 @@ window.__ModuleLoader__ = {
         receiptJumpOk: byName('review-opinions').receiptJumpOk,
         rowBtnWidths: byName('review-opinions').rowBtnWidths,
         rowBtnOk: byName('review-opinions').rowBtnOk,
+        chipNarrow: byName('review-opinions').chipNarrow,
+        chipWide: byName('review-opinions').chipWide,
+        chipNarrowOk: byName('review-opinions').chipNarrowOk,
         chipsAtWidths: byName('review-opinions').widths.map(function (w) { return { width: w.width, chips: w.chips, fits: w.fits } }),
         ok: byName('review-opinions').opinionsOk
       },
@@ -1490,6 +1881,41 @@ window.__ModuleLoader__ = {
         newCall: byName('dismiss').dismissNewCall,
         ok: byName('dismiss').dismissOk
       },
+      theme: (function () {
+        var l = byName('theme-light'), dk = byName('theme-dark')
+        if (!l.theme || !dk.theme) return null
+        var keys = ['panelBg', 'cardBg', 'cardBorder', 'textColor', 'chipColor']
+        var differ = {}
+        keys.forEach(function (k) { differ[k] = l.theme[k] !== dk.theme[k] })
+        function pack(t) {
+          return {
+            mode: t.mode, bodyAttr: t.bodyAttr, panelBg: t.panelBg, cardBg: t.cardBg,
+            cardBorder: t.cardBorder, textColor: t.textColor, chipColor: t.chipColor,
+            panelColorScheme: t.panelColorScheme, expandedBg: t.expandedBg,
+            accent: t.accent, accentText: t.accentText, dim: t.dim,
+            textCount: t.text.count, minTextRatio: t.text.minTextRatio, minNode: t.text.minNode,
+            fails: t.text.fails, textNodes: t.text.nodes,
+            uiGated: t.ui.gated, uiFails: t.ui.fails, decorative: t.ui.decorative,
+            stripRatio: t.stripRatio,
+            focusMode: t.focus.mode, focusRules: t.focus.rules, focusRingBox: t.focus.ringBox,
+            focusClippedBy: t.focus.clippedBy, focusOk: t.focus.ok,
+            fitsOk: t.fitsOk, ok: t.themeOk
+          }
+        }
+        var differOk = keys.every(function (k) { return differ[k] })
+        /* 焦点环颜色也要跟主题走：浅色解析到品牌蓝、深色解析到深色 accent，两边不许相同 */
+        var ringLight = (l.theme.focus.rules[1] || {}).color
+        var ringDark = (dk.theme.focus.rules[1] || {}).color
+        return {
+          light: pack(l.theme),
+          dark: pack(dk.theme),
+          differ: differ,
+          differOk: differOk,
+          focusColor: { light: ringLight, dark: ringDark },
+          focusColorDiffers: !!ringLight && !!ringDark && ringLight !== ringDark,
+          ok: l.themeOk && dk.themeOk && differOk && !!ringLight && !!ringDark && ringLight !== ringDark
+        }
+      })(),
       emptyWindowSummary: byName('empty-window').emptyWindowSummary,
       emptyWindowChips: byName('empty-window').emptyWindowChips,
       emptyWindowOk: byName('empty-window').emptyWindowOk

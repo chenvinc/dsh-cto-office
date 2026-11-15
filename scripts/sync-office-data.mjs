@@ -646,6 +646,15 @@ function checkMode(opts, facts, json) {
         }
         dirty = true;
       }
+      /* bundle 版本也要对得上：docs/office.json 顶层的 bundle 字段是 package.json 的 name@version
+       * （契约里写的是 meta.bundle，实际 schema 是顶层 bundle，两处都认）。
+       * 改了版本忘了 sync 时必须报错，否则 bundle 里记的还是旧版本号。 */
+      const bundleFile = actual.bundle != null ? actual.bundle : (actual.meta && actual.meta.bundle);
+      if (bundleFile !== BUNDLE) {
+        process.stdout.write('E_BUNDLE: ' + jsonRel + ' bundle=' + JSON.stringify(bundleFile) +
+          ' ≠ package.json ' + JSON.stringify(BUNDLE) + '（先 npm run sync）\n');
+        dirty = true;
+      }
       if (actual.provenance && actual.provenance.script !== SCRIPT_ID) {
         process.stdout.write('provenance.script: file=' + JSON.stringify(actual.provenance.script) +
           ' patch=' + JSON.stringify(SCRIPT_ID) + '\n');

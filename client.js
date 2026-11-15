@@ -483,10 +483,43 @@ var OFFICE_FACTS = {
   }
 
   var CSS = [
-    '.co-panel{container-type:inline-size;display:flex;flex-direction:column;height:100%;min-height:0;background:var(--co-bg,#0a0d11);color:var(--co-text,#e8eef4);font:13px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;--co-bg:#0a0d11;--co-panel:#11171e;--co-panel-2:#0c1218;--co-line:#232c37;--co-line-2:#33404e;--co-text:#e8eef4;--co-muted:#94a3b2;--co-dim:#6f8090;--co-accent:#5ac8fa;--co-ok:#7fe0a8;--co-warn:#f2c66d;--co-bad:#ff8f8f;--co-mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono","Courier New",monospace}',
+    /* 主题映射表（本文件所有 hex 只允许出现在这里与宿主兜底值）：
+     * 背景  --co-bg ← --dsw-alias-bg-base；卡面 --co-panel ← --dsw-alias-bg-layer-1；卡底 --co-panel-2 ← --dsw-alias-bg-layer-2
+     * 描边  --co-line ← --dsw-alias-border-l2；--co-line-2 ← --dsw-alias-border-l3
+     * 正文  --co-text ← --dsw-alias-label-primary；次要 --co-muted ← --dsw-alias-label-secondary；更弱 --co-dim ← --dsw-alias-label-tertiary
+     * 强调  --co-accent ← --dsw-alias-brand-primary-new-colorprimary-new-color（浅色）／数据调色板（深色），
+     *       只做环/点/边框（非文字 UI，≥3:1 即可）；文字用的强调另有一条 --co-accent-text（≥4.5:1）。
+     * 通过/要改/未过：深色三个全部走 --co-brand-* 数据调色板（不跟宿主 state token）；
+     *       浅色下宿主的亮绿/亮琥珀/亮红对白底只有 2.279 / 2.148 / 4.498:1，达不到小字 4.5:1，
+     *       所以浅色块里换成更深的专值（见下）。
+     * 更弱  --co-dim 浅色下不能用 label-tertiary（rgb(129,133,140) 对白只剩 3.706:1），换成专值。
+     * 宿主在 body 上给 --dsw-alias-*：浅色是默认（不加属性），深色是 body[data-ds-dark-theme]；
+     * 本面板不读主题缓存、不写死 color-scheme，宿主改属性这里就跟着变。兜底值 = 面板原来的深色板。 */
+    '.co-panel{container-type:inline-size;display:flex;flex-direction:column;height:100%;min-height:0;font:13px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;' +
+      '--co-brand-accent:#5ac8fa;--co-brand-ok:#7fe0a8;--co-brand-warn:#f2c66d;--co-brand-bad:#ff8f8f;' +
+      '--co-bg:var(--dsw-alias-bg-base,#0a0d11);--co-panel:var(--dsw-alias-bg-layer-1,#11171e);--co-panel-2:var(--dsw-alias-bg-layer-2,#0c1218);' +
+      '--co-line:var(--dsw-alias-border-l2,#232c37);--co-line-2:var(--dsw-alias-border-l3,#33404e);' +
+      '--co-text:var(--dsw-alias-label-primary,#e8eef4);--co-muted:var(--dsw-alias-label-secondary,#94a3b2);--co-dim:var(--dsw-alias-label-tertiary,#6f8090);' +
+      '--co-accent:var(--co-brand-accent);--co-accent-text:var(--co-accent);--co-ok:var(--co-brand-ok);--co-warn:var(--co-brand-warn);--co-bad:var(--co-brand-bad);' +
+      '--co-head-a:#121a22;--co-head-b:#0c1218;--co-head-open:#131c25;' +
+      '--co-mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono","Courier New",monospace;' +
+      'background:var(--co-bg);color:var(--co-text)}',
+    /* 浅色（宿主默认，body 不加属性）。`color-scheme:light` 在这里是**有意**写的：
+     * 面板内的滚动条/原生控件要按浅色画，不能指望宿主的 color-scheme 继承下来（宿主深色时这里
+     * 走下面那条 dark 规则）。颜色取值口径：卡底给一层极浅灰，否则卡片和白底贴死没有层次；
+     * 成功/警示/未过/更弱四种小字换成深一档的专值，因为宿主 token 在浅底上过不了 4.5:1；
+     * 文字强调 (--co-accent-text) 也要比宿主品牌蓝深，环/边框仍用宿主品牌蓝。 */
+    'body:not([data-ds-dark-theme]) .co-panel{color-scheme:light;' +
+      '--co-panel-2:#f5f7fa;' +
+      '--co-dim:#636a78;' +
+      '--co-accent:var(--dsw-alias-brand-primary-new-colorprimary-new-color,var(--co-brand-accent));' +
+      '--co-accent-text:#2b5bb8;' +
+      '--co-ok:#137a3a;--co-warn:#a94d08;--co-bad:#c81a1a;' +
+      '--co-head-a:#ffffff;--co-head-b:#f7f9fb;--co-head-open:#eef2f7}',
+    'body[data-ds-dark-theme] .co-panel{color-scheme:dark}',
     '.co-panel *{box-sizing:border-box;min-width:0}',
     '.co-shell{display:flex;flex-direction:column;min-height:0;height:100%;overflow:hidden}',
-    '.co-head{flex:none;padding:10px 12px 8px;border-bottom:1px solid var(--co-line);background:linear-gradient(180deg,#121a22,#0c1218)}',
+    '.co-head{flex:none;padding:10px 12px 8px;border-bottom:1px solid var(--co-line);background:linear-gradient(180deg,var(--co-head-a),var(--co-head-b))}',
     '.co-title{display:flex;align-items:center;gap:8px;justify-content:space-between}',
     '.co-title h2{margin:0;font-size:13.5px;letter-spacing:.01em}',
     '.co-title .co-badge{font:10.5px var(--co-mono);color:var(--co-muted);border:1px solid var(--co-line-2);border-radius:999px;padding:1px 7px;white-space:nowrap}',
@@ -497,6 +530,7 @@ var OFFICE_FACTS = {
     '.co-steps{flex:none;display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:4px;padding:8px 12px;border-bottom:1px solid var(--co-line)}',
     '.co-step{appearance:none;border:1px solid var(--co-line);background:var(--co-panel-2);color:var(--co-muted);border-radius:6px;padding:5px 3px;font:11px/1.2 inherit;cursor:pointer;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
     '.co-step[aria-current="step"]{border-color:var(--co-accent);color:var(--co-text);background:color-mix(in srgb,var(--co-accent) 10%,transparent)}',
+    '.co-step:focus-visible{outline:2px solid var(--co-accent);outline-offset:1px}',
     '.co-step .co-infer{display:block;font:9px var(--co-mono);color:var(--co-dim);margin-top:2px}',
     /* 默认 block、显示态 flex：关闭态是条件渲染，data-show 只在显示态出现 */
     '.co-strip{flex:none;display:block;margin:8px 12px 0;padding:7px 9px;border:1px solid var(--co-line-2);border-radius:6px;font-size:11.5px;color:var(--co-muted);background:var(--co-panel-2)}',
@@ -517,6 +551,9 @@ var OFFICE_FACTS = {
     '.co-card[data-status="blocked"]{border-color:color-mix(in srgb,var(--co-bad) 45%,transparent)}',
     '.co-card[data-status="returned"]{border-color:color-mix(in srgb,var(--co-ok) 30%,transparent)}',
     '.co-card-head{display:flex;align-items:center;gap:7px;width:100%;padding:7px 9px;background:transparent;border:0;color:inherit;font:inherit;text-align:left;cursor:pointer}',
+    /* 卡片头是展开按钮（Esc 回焦落在这里）。卡片 overflow:hidden 会裁外半环：
+     * offset:-2px + 2px 宽 → 环整条落在卡内（外沿正好贴着卡片边框内沿），四边都实测 2px。 */
+    '.co-card-head:focus-visible{outline:2px solid var(--co-accent);outline-offset:-2px}',
     '.co-dot{width:7px;height:7px;border-radius:50%;background:var(--co-dim);flex:none}',
     '.co-card[data-status="running"] .co-dot{background:var(--co-accent)}',
     '.co-card[data-status="returned"] .co-dot{background:var(--co-ok)}',
@@ -527,7 +564,7 @@ var OFFICE_FACTS = {
     '.co-card-head .co-spacer{flex:1 1 auto}',
     '.co-gate{display:inline-flex;align-items:center;gap:3px;font:10px var(--co-mono);border:1px solid var(--co-line-2);border-radius:999px;padding:1px 6px;color:var(--co-muted);white-space:nowrap}',
     '.co-gate[data-gate="PASS"]{color:var(--co-ok);border-color:color-mix(in srgb,var(--co-ok) 50%,transparent)}',
-    '.co-gate[data-gate="CHANGES"]{color:var(--co-warn);border-color:rgba(242,198,109,.5)}',
+    '.co-gate[data-gate="CHANGES"]{color:var(--co-warn);border-color:color-mix(in srgb,var(--co-warn) 50%,transparent)}',
     '.co-gate[data-gate="FAIL"]{color:var(--co-bad);border-color:color-mix(in srgb,var(--co-bad) 50%,transparent)}',
     '.co-gate .co-sym{font-weight:700}',
     '.co-last{padding:0 9px 7px 24px;font-size:11px;color:var(--co-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
@@ -536,7 +573,7 @@ var OFFICE_FACTS = {
     '.co-run-h{font:10.5px var(--co-mono);color:var(--co-muted);margin:0 0 4px}',
     '.co-ev{list-style:none;display:flex;gap:6px;padding:3px 0;font-size:11px;color:var(--co-muted);align-items:baseline}',
     '.co-ev code{font:10px var(--co-mono);color:var(--co-dim);flex:none}',
-    '.co-ev[data-kind="tool-call"] .co-ev-t{color:var(--co-accent)}',
+    '.co-ev[data-kind="tool-call"] .co-ev-t{color:var(--co-accent-text)}',
     '.co-ev[data-kind="tool-result"] .co-ev-t{color:var(--co-text)}',
     '.co-ev[data-kind="user"] .co-ev-t{color:var(--co-text)}',
     /* 证据正文要读全文：不 nowrap、不 ellipsis，长串（路径/命令）按字符折行 */
@@ -551,12 +588,12 @@ var OFFICE_FACTS = {
     '.co-ops{list-style:none;margin:0;padding:0}',
     '.co-empty{padding:18px 8px;text-align:center;color:var(--co-dim);font-size:12px}',
     '.co-foot{flex:none;border-top:1px solid var(--co-line);padding:6px 10px;display:flex;align-items:center;gap:10px;justify-content:center;background:var(--co-panel-2)}',
-    '.co-return{margin-left:auto;display:none;appearance:none;border:1px solid var(--co-accent);background:color-mix(in srgb,var(--co-accent) 12%,transparent);color:var(--co-accent);border-radius:999px;padding:4px 12px;font:11.5px inherit;cursor:pointer}',
+    '.co-return{margin-left:auto;display:none;appearance:none;border:1px solid var(--co-accent);background:color-mix(in srgb,var(--co-accent-text) 10%,transparent);color:var(--co-accent-text);border-radius:999px;padding:4px 12px;font:11.5px inherit;cursor:pointer}',
     '.co-return[data-show="true"]{display:inline-flex;gap:5px;align-items:center}',
     '.co-sr{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}',
-    '.co-card[data-expanded="true"] .co-card-head{background:#131c25}',
+    '.co-card[data-expanded="true"] .co-card-head{background:var(--co-head-open)}',
     '.co-more{margin:4px 0;padding:2px 0;color:var(--co-muted);font-size:10.5px}',
-    '.co-more-btn{appearance:none;margin:4px 0;padding:4px 8px;border:1px solid var(--co-line-2);border-radius:6px;background:transparent;color:var(--co-accent);font:10.5px inherit;cursor:pointer}',
+    '.co-more-btn{appearance:none;margin:4px 0;padding:4px 8px;border:1px solid var(--co-line-2);border-radius:6px;background:transparent;color:var(--co-accent-text);font:10.5px inherit;cursor:pointer}',
     '.co-more-btn:hover{border-color:var(--co-accent)}',
     '.co-more-btn:focus-visible{outline:2px solid var(--co-accent);outline-offset:1px}',
     '.co-rounds{list-style:none;margin:2px 0 0;padding:0}',
@@ -578,7 +615,7 @@ var OFFICE_FACTS = {
     '.co-opinion code{font:10px var(--co-mono);color:var(--co-text)}',
     '.co-advice{margin:1px 0 0 16px;font-size:10.5px;color:var(--co-muted);overflow-wrap:anywhere}',
     '.co-act{padding:2px 0;font-size:11px;color:var(--co-muted);overflow-wrap:anywhere}',
-    '.co-link{appearance:none;background:transparent;border:0;padding:2px 0;color:var(--co-accent);font:11px inherit;cursor:pointer;text-align:left}',
+    '.co-link{appearance:none;background:transparent;border:0;padding:2px 0;color:var(--co-accent-text);font:11px inherit;cursor:pointer;text-align:left}',
     '.co-link:hover{text-decoration:underline}',
     '.co-link:focus-visible{outline:2px solid var(--co-accent);outline-offset:2px}',
     '.co-raw{margin-top:4px}',
@@ -596,7 +633,7 @@ var OFFICE_FACTS = {
     '.co-g-num{display:none}',
     '.co-fallback{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;gap:10px;justify-content:flex-start;padding:16px 14px}',
     '.co-fallback-msg{margin:0;font:11.5px/1.5 var(--co-mono);color:var(--co-muted);overflow-wrap:anywhere;max-height:7.5em;overflow:auto}',
-    '.co-retry{align-self:flex-start;appearance:none;border:1px solid var(--co-accent);background:color-mix(in srgb,var(--co-accent) 12%,transparent);color:var(--co-accent);border-radius:999px;padding:4px 14px;font:11.5px inherit;cursor:pointer}',
+    '.co-retry{align-self:flex-start;appearance:none;border:1px solid var(--co-accent);background:color-mix(in srgb,var(--co-accent-text) 10%,transparent);color:var(--co-accent-text);border-radius:999px;padding:4px 14px;font:11.5px inherit;cursor:pointer}',
     '.co-retry:focus-visible{outline:2px solid var(--co-accent);outline-offset:2px}',
     '@media (prefers-reduced-motion:no-preference){.co-dot{transition:background-color .18s ease}.co-card[data-status="running"] .co-dot{animation:co-breathe 2.4s ease-in-out infinite}.co-card[data-status="blocked"]{animation:co-blocked .8s ease-out 1}@keyframes co-breathe{0%,100%{opacity:1}50%{opacity:.45}}@keyframes co-blocked{0%{box-shadow:0 0 0 3px color-mix(in srgb,var(--co-bad) 35%,transparent)}100%{box-shadow:none}}}',
     '@media (prefers-reduced-motion:reduce){.co-panel *{animation:none!important;transition:none!important}}',
@@ -1420,7 +1457,8 @@ var OFFICE_FACTS = {
           onClick: props.onOpen
         },
           h('span', { className: 'co-sym', 'aria-hidden': 'true' }, meta.sym + ' '),
-          h('span', { className: 'co-g-num' }, props.count ? ' ' + props.count : ''),
+          /* co-sym 自带尾空格，这里不能再带前导空格：窄档两段同显，否则读作「!  3」。 */
+          h('span', { className: 'co-g-num' }, props.count ? String(props.count) : ''),
           h('span', { className: 'co-g-txt' }, meta.label),
           h('span', { className: 'co-g-code' }, ' · ' + code)
         )
@@ -1757,12 +1795,13 @@ var OFFICE_FACTS = {
 
         var newAfter = pinned ? 0 : seenSeq
         var theme = (OFFICE_FACTS && OFFICE_FACTS.theme) || {}
-        var themeStyle = {
-          '--co-accent': theme.accent || '#5ac8fa',
-          '--co-ok': theme.ok || '#7fe0a8',
-          '--co-warn': theme.warn || '#f2c66d',
-          '--co-bad': theme.bad || '#ff8f8f'
-        }
+        /* 数据里的调色板是给深色调的，只作为 --co-brand-* 交给 CSS；
+         * 浅色下成功/警示/强调由样式表的主题块覆盖，缺省值也写在那边，这里不再重复一遍 hex。 */
+        var themeStyle = {}
+        if (theme.accent) themeStyle['--co-brand-accent'] = theme.accent
+        if (theme.ok) themeStyle['--co-brand-ok'] = theme.ok
+        if (theme.warn) themeStyle['--co-brand-warn'] = theme.warn
+        if (theme.bad) themeStyle['--co-brand-bad'] = theme.bad
 
         var strips = []
         if (rootFault) {
@@ -2009,8 +2048,8 @@ var OFFICE_FACTS = {
                                 'data-round-id': f.child.id,
                                 'aria-expanded': open ? 'true' : 'false',
                                 onClick: function () { setOpenRound(open ? '' : f.child.id) }
-                              }, '第 ' + (idx2 + 1) + ' 轮 ' + (f.gate ? (gateChip(f.gate).symbol + ' ') : '') +
-                                (formatTime(f.events[0] && f.events[0].time).slice(0, 5)) + ' ' +
+                              }, '第 ' + (idx2 + 1) + ' 轮 · ' +
+                                (formatTime(f.events[0] && f.events[0].time).slice(0, 5)) + ' · ' +
                                 roundHeadText(f.events, f.gate)),
                               open ? h('div', { className: 'co-raw' }, h(EventList, { events: f.events, roleName: feedRoleName(f) })) : null)
                           })),

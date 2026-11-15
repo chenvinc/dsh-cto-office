@@ -92,3 +92,6 @@ plugin_manager action=install_bundle target=github:<你的账号>/dsh-cto-office
 - `bash` 本身能写文件，所以只读岗的边界是「没有 write/edit 工具」+ 章程铁律两层，不是内核级沙盒。
 - `write_scopes` 是提示不是锁；冲突靠 `revision` CAS 和 CTO 的分片纪律避免。
 - 没有引入 `workflow` 与 `subagent_fork`：前者没有角色槽位，后者会让子代理继承 CTO 的全量工具，都会绕过岗位边界。
+- 主题跟宿主走（浅色默认、`body[data-ds-dark-theme]` 转深色），但有一组颜色是手挑的达标值，宿主换配色时不会自动跟：浅色下 `--co-ok`/`--co-warn`/`--co-bad`/`--co-dim`/`--co-accent-text` 五个各自覆盖（宿主 `state-success`/`state-warn`/`state-error` 与 `label-tertiary` 对白底只有 2.279:1 / 2.148:1 / 4.498:1 / 3.706:1，小字达标线是 4.5:1）；深色下 `--co-ok`/`--co-warn`/`--co-bad` 全部走 `--co-brand-*` 数据调色板（同样不跟宿主 token）。文字强调 `--co-accent-text` 与装饰强调 `--co-accent` 是两条：环/点/边框用后者（≥3:1 即可），链接文字用前者（≥4.5:1）。
+- `scripts/preview-liveboard.html` 里的宿主 token 是 `design-platform.css` 的字面值快照，宿主改色板后 harness 会漂移，而 `npm run check` 只校验 office-data 的 patch 和 bundle 版本，查不出来。
+- 焦点环的真实键盘态不在 harness 里验：`el.focus({focusVisible:true})` 在本机 Edge 是 no-op（模拟出来的断言恒假），所以 harness 只断言 CSS 规则本身（`focusMode:"css-rule"`，2px + 颜色解析到本主题 accent + 环不被裁），真实 Tab 态用 CDP `Input.dispatchKeyEvent` 的脚本在外部验。
