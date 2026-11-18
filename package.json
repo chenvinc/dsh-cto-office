@@ -1,9 +1,25 @@
 {
-  "name": "@chy/dsh-cto-office",
-  "version": "0.2.3",
+  "name": "@swiper1881/dsh-cto-office",
+  "version": "0.2.4",
   "description": "CTO 办公室模式：一名 CTO 带六个岗位（架构师、工程师、评审、QA、UI/UX 设计、业务）的 agent 预设集合",
   "type": "module",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/chenvinc/dsh-cto-office.git"
+  },
+  "homepage": "https://github.com/chenvinc/dsh-cto-office#readme",
+  "bugs": {
+    "url": "https://github.com/chenvinc/dsh-cto-office/issues"
+  },
+  "keywords": [
+    "dsh",
+    "deepseek-harness",
+    "plugin",
+    "agent-presets",
+    "cto",
+    "multi-agent"
+  ],
   "exports": {
     ".": {
       "import": "./index.js"
@@ -48,7 +64,8 @@
   },
   "scripts": {
     "sync": "node scripts/sync-office-data.mjs",
-    "check": "node scripts/sync-office-data.mjs --check"
+    "check": "node scripts/sync-office-data.mjs --check",
+    "prepublishOnly": "npm run check"
   },
   "main": "./index.js"
 }

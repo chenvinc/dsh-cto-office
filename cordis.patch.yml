@@ -63,7 +63,7 @@
                     const path = process.getBuiltinModule('node:path');
                     const url = process.getBuiltinModule('node:url');
                     const { createRequire } = process.getBuiltinModule('node:module');
-                    const self = '@chy/dsh-cto-office';
+                    const self = '@swiper1881/dsh-cto-office';
                     const hasSkills = dir => typeof dir === 'string' && fs.existsSync(path.join(dir, 'cto-office', 'SKILL.md'));
                     const candidates = [];
                     try { candidates.push(url.fileURLToPath(new URL('skills', baseUrl))); } catch {}
@@ -185,7 +185,7 @@
                     const path = process.getBuiltinModule('node:path');
                     const url = process.getBuiltinModule('node:url');
                     const { createRequire } = process.getBuiltinModule('node:module');
-                    const self = '@chy/dsh-cto-office';
+                    const self = '@swiper1881/dsh-cto-office';
                     const hasSkills = dir => typeof dir === 'string' && fs.existsSync(path.join(dir, 'cto-office', 'SKILL.md'));
                     const candidates = [];
                     try { candidates.push(url.fileURLToPath(new URL('skills', baseUrl))); } catch {}
@@ -272,7 +272,7 @@
                     const path = process.getBuiltinModule('node:path');
                     const url = process.getBuiltinModule('node:url');
                     const { createRequire } = process.getBuiltinModule('node:module');
-                    const self = '@chy/dsh-cto-office';
+                    const self = '@swiper1881/dsh-cto-office';
                     const hasSkills = dir => typeof dir === 'string' && fs.existsSync(path.join(dir, 'cto-office', 'SKILL.md'));
                     const candidates = [];
                     try { candidates.push(url.fileURLToPath(new URL('skills', baseUrl))); } catch {}
@@ -354,7 +354,7 @@
                     const path = process.getBuiltinModule('node:path');
                     const url = process.getBuiltinModule('node:url');
                     const { createRequire } = process.getBuiltinModule('node:module');
-                    const self = '@chy/dsh-cto-office';
+                    const self = '@swiper1881/dsh-cto-office';
                     const hasSkills = dir => typeof dir === 'string' && fs.existsSync(path.join(dir, 'cto-office', 'SKILL.md'));
                     const candidates = [];
                     try { candidates.push(url.fileURLToPath(new URL('skills', baseUrl))); } catch {}
@@ -436,7 +436,7 @@
                     const path = process.getBuiltinModule('node:path');
                     const url = process.getBuiltinModule('node:url');
                     const { createRequire } = process.getBuiltinModule('node:module');
-                    const self = '@chy/dsh-cto-office';
+                    const self = '@swiper1881/dsh-cto-office';
                     const hasSkills = dir => typeof dir === 'string' && fs.existsSync(path.join(dir, 'cto-office', 'SKILL.md'));
                     const candidates = [];
                     try { candidates.push(url.fileURLToPath(new URL('skills', baseUrl))); } catch {}
@@ -518,7 +518,7 @@
                     const path = process.getBuiltinModule('node:path');
                     const url = process.getBuiltinModule('node:url');
                     const { createRequire } = process.getBuiltinModule('node:module');
-                    const self = '@chy/dsh-cto-office';
+                    const self = '@swiper1881/dsh-cto-office';
                     const hasSkills = dir => typeof dir === 'string' && fs.existsSync(path.join(dir, 'cto-office', 'SKILL.md'));
                     const candidates = [];
                     try { candidates.push(url.fileURLToPath(new URL('skills', baseUrl))); } catch {}
@@ -605,7 +605,7 @@
                     const path = process.getBuiltinModule('node:path');
                     const url = process.getBuiltinModule('node:url');
                     const { createRequire } = process.getBuiltinModule('node:module');
-                    const self = '@chy/dsh-cto-office';
+                    const self = '@swiper1881/dsh-cto-office';
                     const hasSkills = dir => typeof dir === 'string' && fs.existsSync(path.join(dir, 'cto-office', 'SKILL.md'));
                     const candidates = [];
                     try { candidates.push(url.fileURLToPath(new URL('skills', baseUrl))); } catch {}
@@ -649,5 +649,5 @@
 # dsh-better-sidebar 同款：聚合 bundle 若已用别的 id 挂了本包，这一行退让。
 - insert:
     - id: cto-office-live
-      name: '@chy/dsh-cto-office'
-      disabled: !!js "[...ctx.loader.entries()].some((e) => e.options.name === '@chy/dsh-cto-office' && e.options.id !== 'cto-office-live' && !e.disabled)"
+      name: '@swiper1881/dsh-cto-office'
+      disabled: !!js "[...ctx.loader.entries()].some((e) => e.options.name === '@swiper1881/dsh-cto-office' && e.options.id !== 'cto-office-live' && !e.disabled)"

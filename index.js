@@ -7,7 +7,7 @@
  * 声明，由 Web 客户端按 `exports["./client"]` 以 classic script 加载。
  */
 
-export const name = '@chy/dsh-cto-office'
+export const name = '@swiper1881/dsh-cto-office'
 
 export const inject = []
 

@@ -237,10 +237,10 @@ var OFFICE_FACTS = {
 ;(function () {
   'use strict'
 
-  var PLUGIN_ID = '@chy/dsh-cto-office'
+  var PLUGIN_ID = '@swiper1881/dsh-cto-office'
   var STYLE_ID = 'cto-office-feed.css'
   var KIND = 'cto-office.role-feed'
-  var TAB_ID = '@chy/dsh-cto-office:role-feed'
+  var TAB_ID = '@swiper1881/dsh-cto-office:role-feed'
   var DISMISS_KEY = 'cto-office.role-feed.dismissed'
   var NOOP = function () {}
   var EMPTY_SNAP = { entries: [], hasMore: false, revision: 0 }

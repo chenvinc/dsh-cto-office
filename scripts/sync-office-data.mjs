@@ -122,6 +122,12 @@ function readBundleId() {
 
 const BUNDLE = readBundleId();
 
+// 架构页眉的静态兜底只写包名、不写版本；它不在 office-data 区间里，
+// sync 时必须一起刷新，否则改名/改版本后会留下旧包名。
+function bundleName() {
+  return BUNDLE.slice(0, BUNDLE.lastIndexOf('@'));
+}
+
 function parseArgs(argv) {
   const opts = { check: false, stdout: false, quiet: false, patch: DEFAULTS.patch,
     html: DEFAULTS.html, json: DEFAULTS.json, client: DEFAULTS.client, skill: DEFAULTS.skill };
@@ -489,7 +495,10 @@ function injectHtml(htmlText, json) {
   const { lines, starts, ends } = markersIn(htmlText);
   const body = htmlScriptBody(json).replace(/\n$/, '');
   const next = lines.slice(0, starts + 1).concat(body.split('\n'), lines.slice(ends));
-  return next.join('\n');
+  return next.join('\n').replace(
+    /(<span id="eyebrow-bundle">)[^<]*(<\/span>)/,
+    (_match, open, close) => open + bundleName() + close
+  );
 }
 
 function clientFactsOf(facts) {
@@ -678,6 +687,15 @@ function checkMode(opts, facts, json) {
       }
     });
     const { inner } = markersIn(html);
+    const eyebrow = html.match(/<span id="eyebrow-bundle">([^<]*)<\/span>/);
+    if (!eyebrow) {
+      process.stdout.write(htmlRel + ': 缺少 eyebrow-bundle 静态兜底\n');
+      dirty = true;
+    } else if (eyebrow[1] !== bundleName()) {
+      process.stdout.write(htmlRel + ': eyebrow-bundle=' + JSON.stringify(eyebrow[1]) +
+        ' ≠ ' + JSON.stringify(bundleName()) + '\n');
+      dirty = true;
+    }
     const text = inner.join('\n');
     const m = text.match(/<script type="application\/json" id="office-data">\n([\s\S]*)\n<\/script>/);
     if (!m) {

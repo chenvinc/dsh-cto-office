@@ -45,7 +45,7 @@
 plugin_manager action=install_bundle target=/Users/chy/个人工作台/cto-office
 
 # 卸
-plugin_manager action=remove_bundle target=@chy/dsh-cto-office
+plugin_manager action=remove_bundle target=@swiper1881/dsh-cto-office
 ```
 
 安装后：新建会话 → 模式选「CTO 办公室」。岗位预设不单独开会话用，它们是 CTO 派工的选项。
@@ -65,7 +65,7 @@ git push -u origin main
 plugin_manager action=install_bundle target=github:<你的账号>/dsh-cto-office#<sha>
 ```
 
-装完按同样三步验收：`list_bundles` 里能看到 `@chy/dsh-cto-office` 且 `overrides` 含 `agent-team`；新建会话的模式列表里有「CTO 办公室」；在 CTO 会话里派一次 `cto-reviewer`，确认它看不到 `write`/`edit`。
+装完按同样三步验收：`list_bundles` 里能看到 `@swiper1881/dsh-cto-office` 且 `overrides` 含 `agent-team`；新建会话的模式列表里有「CTO 办公室」；在 CTO 会话里派一次 `cto-reviewer`，确认它看不到 `write`/`edit`。
 
 对方机器需要满足：
 
@@ -77,10 +77,10 @@ plugin_manager action=install_bundle target=github:<你的账号>/dsh-cto-office
 
 ## 改
 
-安装用的是 `link:` 协议，profile 的 `node_modules/@chy/dsh-cto-office` 指向本目录，所以**改这里的文件就是改运行时**：
+安装用的是 `link:` 协议，profile 的 `node_modules/@swiper1881/dsh-cto-office` 指向本目录，所以**改这里的文件就是改运行时**：
 
 - **改岗位规程**：直接改 `skills/<岗位>/SKILL.md`，下一个会话（或下一次技能读取）就生效。
-- **改人格 / 挂哪些工具**：改 `cordis.patch.yml` 里对应预设的 `persona.prefix` 或 `plugins`。**改完必须让 Host 重新组合一次补丁**——实测 `patchReload: live` 不会重读已装 bundle 的 patch，最省事的办法是 `plugin_manager` 对 `@chy/dsh-cto-office` 先 `set_bundle enabled=false` 再 `true`，或者重启 Host；只改 `skills/*/SKILL.md` 不用重载。
+- **改人格 / 挂哪些工具**：改 `cordis.patch.yml` 里对应预设的 `persona.prefix` 或 `plugins`。**改完必须让 Host 重新组合一次补丁**——实测 `patchReload: live` 不会重读已装 bundle 的 patch，最省事的办法是 `plugin_manager` 对 `@swiper1881/dsh-cto-office` 先 `set_bundle enabled=false` 再 `true`，或者重启 Host；只改 `skills/*/SKILL.md` 不用重载。
 - **给某个岗位开口子**：把它的 `tool-fs` 里 `write: false` / `edit: false` 去掉，再按上面重载一次。开完口子就等于放弃了硬隔离，章程里的铁律还会在，但工具不再拦得住。
 - **关闭默认任务板**：删掉 `cordis.patch.yml` 开头的 `- id: agent-team` 覆盖行，重装。
 - **改右栏面板**：`client.js` 是浏览器半（classic script，不能出现 import/export），改完刷新页面生效。它内嵌的 `OFFICE_FACTS` 由 `npm run sync` 从 patch 生成，`npm run check` 会校验两者一致；改 patch 后先 sync 再 check。面板订阅事件用的 source 名是 `cto-office/liveboard`，宿主不校验它，但它没在 `SessionReferenceSourceMap` 登记——改名之前先去 `packages/api/session-controller/src/client/index.ts` 补一条。
