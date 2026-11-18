@@ -119,17 +119,19 @@ window.__ModuleLoader__ = {
     return
   }
 
-  /* ── 1. 注入真组件自带样式：宿主会读 meta().stylesheets，harness 自己照做 ── */
-  var meta = typeof handoff.meta === 'function' ? handoff.meta() : {}
-  var sheets = (meta && meta.stylesheets) || {}
-  var sheetNames = Object.keys(sheets)
-  sheetNames.forEach(function (name) {
-    var sheet = sheets[name]
-    var style = document.createElement('style')
-    style.setAttribute('data-sheet', name)
-    style.textContent = typeof sheet.text === 'function' ? sheet.text() : ''
-    document.head.appendChild(style)
-  })
+  /* ── 1. 样式：由 client.js 自己在 factory 内注入（DSH 0.2.2-rc.4 不再读 meta().stylesheets），
+   * harness 不再代注入，只读断言：标签由 client.js 建、且全局只有 1 个。 ── */
+  var STYLE_SELECTOR = 'style[data-plugin="@chy/dsh-cto-office"]'
+  var styleSeen = []
+
+  function styleProbe() {
+    var tags = document.querySelectorAll(STYLE_SELECTOR)
+    return {
+      count: tags.length,
+      textLength: tags.length ? tags[0].textContent.length : 0,
+      cssName: tags.length ? tags[0].getAttribute('data-plugin-css') : null
+    }
+  }
 
   /* ── 2. require 桩：只认真需要的模块，不许引网络资源 ── */
   function requireStub(spec) {
@@ -629,6 +631,8 @@ window.__ModuleLoader__ = {
     world = buildWorld(sc)
     var ctx = buildCtx(world)
     var module = handoff.factory(requireStub)
+    /* 每次 factory 执行后记录一次标签数：16 个场景 = 16 次重复执行，断言不重复注入 */
+    styleSeen.push(styleProbe())
     module.apply(ctx)
     var useProjection = function (key) { return key === 'subagentCatalog' ? world.catalog : undefined }
     var node = React.createElement(paneRender, { key: sc.name, sessionId: sc.rootId, useProjection: useProjection })
@@ -1744,7 +1748,7 @@ window.__ModuleLoader__ = {
   var moduleInject = null
 
   async function runAll() {
-    log('handoff.id=' + handoff.id + ' sheets=' + JSON.stringify(sheetNames))
+    log('handoff.id=' + handoff.id + ' style=' + JSON.stringify(styleProbe()))
     log('module.inject=' + JSON.stringify(moduleInject))
     var reports = []
     var names = ['live', 'ended', 'empty-window', 'window-partial', 'retain-fail', 'partial', 'preset-fault', 'offbook-preset', 'retain-peak', 'privacy', 'review-opinions', 'confirm', 'dismiss', 'theme-light', 'theme-dark', 'crash']
@@ -1758,7 +1762,23 @@ window.__ModuleLoader__ = {
     }
     LB.reports = reports
     function byName(n) { return reports.filter(function (r) { return r.scenario === n })[0] }
+    var finalStyle = styleProbe()
+    /* factory 每次执行（16 个场景 + 页面开头的 probe + 各场景自己的重挂）都记录一次：
+     * 断言每次执行后全局仍只有 1 个标签，且文本长度从头到尾不变（没有被重复追加/覆盖成别的样式）。 */
+    var styleOk = finalStyle.count === 1 && finalStyle.textLength > 0 &&
+      styleSeen.length >= names.length + 1 &&
+      styleSeen.every(function (s) { return s.count === 1 && s.textLength === finalStyle.textLength }) &&
+      styleSeen.every(function (s) { return s.cssName === finalStyle.cssName })
     log('SUMMARY ' + JSON.stringify({
+      style: {
+        selector: STYLE_SELECTOR,
+        count: finalStyle.count,
+        textLength: finalStyle.textLength,
+        cssName: finalStyle.cssName,
+        factoryRuns: styleSeen.length,
+        countsPerRun: styleSeen.map(function (s) { return s.count }),
+        ok: styleOk
+      },
       cards: reports.map(function (r) { return r.scenario + ':' + r.firstPaint.cards }),
       states: reports.map(function (r) { return r.scenario + ':' + r.firstPaint.state }),
       crashFallback: byName('crash').firstPaint.fallback,
@@ -1926,6 +1946,7 @@ window.__ModuleLoader__ = {
   /* factory 只在 mount 时调，module.inject 需要提前拿到：先试一次只取 inject */
   try {
     var probe = handoff.factory(requireStub)
+    styleSeen.push(styleProbe())
     moduleInject = probe.inject
   } catch (error) {
     moduleInject = 'factory-error: ' + error.message

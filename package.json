@@ -1,6 +1,6 @@
 {
   "name": "@chy/dsh-cto-office",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "CTO 办公室模式：一名 CTO 带六个岗位（架构师、工程师、评审、QA、UI/UX 设计、业务）的 agent 预设集合",
   "type": "module",
   "license": "MIT",
@@ -34,7 +34,8 @@
       "dshReleases": {
         "0.2.2-rc.1": "unknown",
         "0.2.2-rc.2": "unknown",
-        "0.2.2-rc.3": "compatible"
+        "0.2.2-rc.3": "compatible",
+        "0.2.2-rc.4": "compatible"
       },
       "profiles": [
         "web"

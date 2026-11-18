@@ -237,6 +237,8 @@ var OFFICE_FACTS = {
 ;(function () {
   'use strict'
 
+  var PLUGIN_ID = '@chy/dsh-cto-office'
+  var STYLE_ID = 'cto-office-feed.css'
   var KIND = 'cto-office.role-feed'
   var TAB_ID = '@chy/dsh-cto-office:role-feed'
   var DISMISS_KEY = 'cto-office.role-feed.dismissed'
@@ -648,12 +650,34 @@ var OFFICE_FACTS = {
     '@media (max-width:359px){.co-preset{display:none}}'
   ].join('\n')
 
+  /* 样式注入：DSH 0.2.2-rc.4 的注册协议只有 { id, chunk?, factory }
+   * （packages/client/modules/src/client/manifest.ts:363 的 ClientBundleRegistration 没有 meta 字段，
+   * system.ts 里也没有任何 meta 处理路径），旧写法 meta().stylesheets 一个字节都不会进页面。
+   * 改成在 factory 内自建 <style>：加载器 materialize 期间 claimStyles 会认领这些标签
+   * （system.ts:71-88），卸载时 removeOwnedStyles 按 data-plugin=<注册 id> 清掉
+   * （entry-lifecycle.ts:23-27）。 */
+  function injectStyles() {
+    if (typeof document === 'undefined' || !document.head) return
+    /* 幂等：HMR / 重新挂载会让 factory 再跑一次。先按 (data-plugin, data-plugin-css) 查、命中就复用，
+     * 不删了重建：复用同一个节点，身份稳定，也不会让整张样式表被浏览器重新解析一遍。
+     * 处理 HMR 旧版本残留靠的是下面那句内容比对——标签内容与当前 CSS 常量不一致就回写。 */
+    var selector = 'style[data-plugin="' + PLUGIN_ID + '"][data-plugin-css="' + STYLE_ID + '"]'
+    var style = document.querySelector(selector)
+    if (!style) {
+      style = document.createElement('style')
+      style.setAttribute('data-plugin', PLUGIN_ID)
+      style.setAttribute('data-plugin-css', STYLE_ID)
+      document.head.appendChild(style)
+    }
+    if (style.textContent !== CSS) style.textContent = CSS
+  }
+
   window.__ModuleLoader__.load({
-    id: '@chy/dsh-cto-office',
-    meta: function () {
-      return { stylesheets: { 'cto-office-feed.css': { text: function () { return CSS } } } }
-    },
+    id: PLUGIN_ID,
     factory: function (require) {
+      /* 必须在 factory 内注入：模块顶层的副作用不受加载器生命周期管理，
+       * 也不会被 removeOwnedStyles 清掉。 */
+      injectStyles()
       var React = require('react')
       var h = React.createElement
 
