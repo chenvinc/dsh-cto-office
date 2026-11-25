@@ -13,6 +13,7 @@ import { tmpdir } from 'node:os'
 import { join, relative } from 'node:path'
 
 import { CardStore } from '../lib/store.js'
+import { StoreRegistry } from '../lib/registry.js'
 import { buildTools } from '../lib/tools.js'
 import { ArtifactStore } from '../lib/artifacts.js'
 import { makePostExecuteReceiptGuard } from '../lib/receipt-guard.js'
@@ -54,8 +55,9 @@ async function main() {
   const { dir, git } = buildRepo()
   const store = new CardStore(dir, {})
   const art = new ArtifactStore(store)
-  const tools = buildTools({}, { store, config: { maxConcurrentWriters: 1 } })
-  const guard = makePostExecuteReceiptGuard({ store, config: { writerPresets: ['cto-builder'] } })
+  const registry = new StoreRegistry({})
+  const tools = buildTools({}, { registry, config: { maxConcurrentWriters: 1 } })
+  const guard = makePostExecuteReceiptGuard({ registry, config: { writerPresets: ['cto-builder'] } })
   const accept = async () => ({ kind: 'accept' })
   const W = dir
 

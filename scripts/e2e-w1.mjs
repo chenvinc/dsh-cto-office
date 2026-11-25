@@ -14,6 +14,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { CardStore } from '../lib/store.js'
+import { StoreRegistry } from '../lib/registry.js'
 import { buildTools } from '../lib/tools.js'
 import { STATES } from '../lib/card.js'
 import { makePostExecuteReceiptGuard } from '../lib/receipt-guard.js'
@@ -44,7 +45,8 @@ function makeRepo() {
 async function main() {
   const { dir, git } = makeRepo()
   const store = new CardStore(dir, {})
-  const tools = buildTools({}, { store, config: { maxConcurrentWriters: 1 } })
+  const registry = new StoreRegistry({})
+  const tools = buildTools({}, { registry, config: { maxConcurrentWriters: 1 } })
   const W = dir
 
   // 0) 工件先于卡：没有验收基线不许派工
@@ -109,7 +111,7 @@ async function main() {
 
   appendFileSync(join(dir, 'app', 'p.tsx'), 'export const Q = 2\n')
   git('add', '-A'); git('commit', '-qm', 'in scope')
-  const receiptGuard2 = makePostExecuteReceiptGuard({ store, config: { writerPresets: ['cto-builder'] } })
+  const receiptGuard2 = makePostExecuteReceiptGuard({ registry, config: { writerPresets: ['cto-builder'] } })
   const c2Receipt = [
     'RECEIPT:',
     '- card: C2',
@@ -160,7 +162,7 @@ async function main() {
   check('latestEvidence 只返回权威来源', latest?.source !== 'cto-narrative', 'source=' + latest?.source)
 
   // 9) 回执闸门：缺 RECEIPT 的写岗交付被 block
-  const receiptGuard = makePostExecuteReceiptGuard({ store, config: { writerPresets: ['cto-builder'] } })
+  const receiptGuard = makePostExecuteReceiptGuard({ registry, config: { writerPresets: ['cto-builder'] } })
   const next = async () => ({ kind: 'accept' })
   const blocked = await receiptGuard(
     { name: 'subagent', arguments: { agent_preset: 'cto-builder', prompt: '【任务卡 C2】x' } },

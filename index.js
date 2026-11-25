@@ -10,7 +10,7 @@
  *  - 守卫自身出错必须放行，判定层不能把会话卡死。
  */
 import { join } from 'node:path'
-import { CardStore } from './lib/store.js'
+import { StoreRegistry } from './lib/registry.js'
 import { buildTools } from './lib/tools.js'
 import { makePreExecuteGuard } from './lib/guards.js'
 import { Supervisor } from './lib/supervisor.js'
@@ -70,19 +70,26 @@ function makeWhenCto(ap) {
 
 export function apply(ctx, config) {
   const resolved = resolveConfig(config)
-  const store = new CardStore(resolved.workspaceRoot, { cardsDir: resolved.cardsDir })
+  // 仓库按工作区懒建：apply 时宿主还不知道用户工作区，绝不能用进程 cwd 兜底。
+  const registry = new StoreRegistry({ cardsDir: resolved.cardsDir })
 
-  // 超时监督器：一期 A 只做「QUEUED 持有者 idle」这一条最小报警。
-  let supervisor
-  if (resolved.supervisor.enabled !== false) {
-    supervisor = new Supervisor(store, {
-      pollIntervalMs: resolved.supervisor.pollIntervalMs,
-      queuedAlertMs: resolved.supervisor.queuedAlertMs,
-    })
-    resolved.supervisorInstance = supervisor
+  // 超时监督器按工作区各一个（一期 A 只做「QUEUED 持有者 idle」最小报警）。
+  const supervisors = new Map()
+  const supervisorFor = workspace => {
+    if (resolved.supervisor.enabled === false) return undefined
+    let sup = supervisors.get(workspace)
+    if (!sup) {
+      sup = new Supervisor(registry.get(workspace), {
+        pollIntervalMs: resolved.supervisor.pollIntervalMs,
+        queuedAlertMs: resolved.supervisor.queuedAlertMs,
+      })
+      supervisors.set(workspace, sup)
+    }
+    return sup
   }
+  resolved.supervisorInstance = { get: supervisorFor }
 
-  const tools = buildTools(ctx, { store, config: resolved })
+  const tools = buildTools(ctx, { registry, config: resolved })
 
   // agentPresets 是可选依赖：拿不到就不收窄（放行），不因此让整个插件加载失败。
   const ap = (() => { try { return ctx.agentPresets } catch { return undefined } })()
@@ -96,12 +103,23 @@ export function apply(ctx, config) {
     return () => { try { dispose() } catch {} }
   })
 
-  ctx.on('tools/pre-execute', makePreExecuteGuard({ store, config: resolved }))
-  ctx.on('tools/post-execute', makePostExecuteReceiptGuard({ store, config: resolved }))
+  ctx.on('tools/pre-execute', makePreExecuteGuard({ registry, config: resolved }))
+  ctx.on('tools/post-execute', makePostExecuteReceiptGuard({ registry, config: resolved }))
 
   // 挂到宿主 timer 服务；没有就明确跳过（不偷偷改成 setInterval）。
-  if (supervisor) {
-    const stopTimer = supervisor.attach(ctx)
+  // 每轮轮询所有已建立的工作区仓库。
+  const timer = ctx.timer
+  if (resolved.supervisor.enabled !== false && timer && typeof timer.interval === 'function') {
+    const stopTimer = timer.interval(() => {
+      for (const workspace of registry.workspaces()) {
+        try {
+          const sup = supervisorFor(workspace)
+          for (const alert of sup.tick()) {
+            try { ctx.log?.warn?.(alert.message) } catch {}
+          }
+        } catch {}
+      }
+    }, resolved.supervisor.pollIntervalMs)
     ctx.effect?.(() => stopTimer)
   }
 
