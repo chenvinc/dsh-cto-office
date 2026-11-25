@@ -1,3 +1,6 @@
 node_modules/
 .DS_Store
 *.tgz
+
+# W1 运行时产物（卡与证据属于工作区状态，不进本包）
+.cto-office/
