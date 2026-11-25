@@ -3,9 +3,9 @@
   "bundle": "@swiper1881/dsh-cto-office@0.3.0-alpha.1",
   "provenance": {
     "sourceFile": "cordis.patch.yml",
-    "sha256": "b092320f6f70a3b8cb4d78e3d8f845d082b5b40a68a83b7f7eb1e5dfa6085cad",
-    "sha256Short": "b092320f",
-    "lines": 653,
+    "sha256": "6d3aa1ff92f7102cd564d8408d4c5b0caa45087b82b4031a0444befaee639164",
+    "sha256Short": "6d3aa1ff",
+    "lines": 666,
     "script": "sync-office-data@2",
     "verify": "generated-from-patch"
   },
@@ -156,31 +156,31 @@
         "allowedAgentPresets": []
       },
       "sourceRefs": [
-        141,
-        162,
-        165,
-        168,
-        171,
-        172,
-        173,
-        174,
+        154,
+        175,
         178,
-        197,
-        199,
-        203
+        181,
+        184,
+        185,
+        186,
+        187,
+        191,
+        210,
+        212,
+        216
       ],
       "toolLines": {
-        "read": 168,
-        "write": 171,
-        "edit": 172,
-        "applyPatch": 173,
-        "bash": 162,
-        "pwsh": 165,
-        "search": 174,
-        "todo": 199,
-        "web": 203,
-        "skill": 197,
-        "fsSearch": 178
+        "read": 181,
+        "write": 184,
+        "edit": 185,
+        "applyPatch": 186,
+        "bash": 175,
+        "pwsh": 178,
+        "search": 187,
+        "todo": 212,
+        "web": 216,
+        "skill": 210,
+        "fsSearch": 191
       }
     },
     {
@@ -216,27 +216,27 @@
         "allowedAgentPresets": []
       },
       "sourceRefs": [
-        228,
-        249,
-        252,
-        255,
-        258,
-        259,
-        263,
+        241,
+        262,
         265,
-        284,
-        286
+        268,
+        271,
+        272,
+        276,
+        278,
+        297,
+        299
       ],
       "toolLines": {
-        "read": 255,
-        "applyPatch": 258,
-        "bash": 249,
-        "pwsh": 252,
-        "search": 259,
-        "jobs": 263,
-        "todo": 286,
-        "skill": 284,
-        "fsSearch": 265
+        "read": 268,
+        "applyPatch": 271,
+        "bash": 262,
+        "pwsh": 265,
+        "search": 272,
+        "jobs": 276,
+        "todo": 299,
+        "skill": 297,
+        "fsSearch": 278
       }
     },
     {
@@ -272,29 +272,29 @@
         "allowedAgentPresets": []
       },
       "sourceRefs": [
-        310,
-        331,
-        334,
-        337,
-        340,
-        341,
-        342,
-        343,
+        323,
+        344,
         347,
-        366,
-        368
+        350,
+        353,
+        354,
+        355,
+        356,
+        360,
+        379,
+        381
       ],
       "toolLines": {
-        "read": 337,
-        "write": 340,
-        "edit": 341,
-        "applyPatch": 342,
-        "bash": 331,
-        "pwsh": 334,
-        "search": 343,
-        "todo": 368,
-        "skill": 366,
-        "fsSearch": 347
+        "read": 350,
+        "write": 353,
+        "edit": 354,
+        "applyPatch": 355,
+        "bash": 344,
+        "pwsh": 347,
+        "search": 356,
+        "todo": 381,
+        "skill": 379,
+        "fsSearch": 360
       }
     },
     {
@@ -330,29 +330,29 @@
         "allowedAgentPresets": []
       },
       "sourceRefs": [
-        392,
-        413,
-        416,
-        419,
-        422,
-        423,
-        424,
-        425,
+        405,
+        426,
         429,
-        448,
-        450
+        432,
+        435,
+        436,
+        437,
+        438,
+        442,
+        461,
+        463
       ],
       "toolLines": {
-        "read": 419,
-        "write": 422,
-        "edit": 423,
-        "applyPatch": 424,
-        "bash": 413,
-        "pwsh": 416,
-        "search": 425,
-        "todo": 450,
-        "skill": 448,
-        "fsSearch": 429
+        "read": 432,
+        "write": 435,
+        "edit": 436,
+        "applyPatch": 437,
+        "bash": 426,
+        "pwsh": 429,
+        "search": 438,
+        "todo": 463,
+        "skill": 461,
+        "fsSearch": 442
       }
     },
     {
@@ -388,31 +388,31 @@
         "allowedAgentPresets": []
       },
       "sourceRefs": [
-        474,
-        495,
-        498,
-        501,
-        504,
-        505,
-        506,
-        507,
+        487,
+        508,
         511,
-        530,
-        532,
-        536
+        514,
+        517,
+        518,
+        519,
+        520,
+        524,
+        543,
+        545,
+        549
       ],
       "toolLines": {
-        "read": 501,
-        "write": 504,
-        "edit": 505,
-        "applyPatch": 506,
-        "bash": 495,
-        "pwsh": 498,
-        "search": 507,
-        "todo": 532,
-        "web": 536,
-        "skill": 530,
-        "fsSearch": 511
+        "read": 514,
+        "write": 517,
+        "edit": 518,
+        "applyPatch": 519,
+        "bash": 508,
+        "pwsh": 511,
+        "search": 520,
+        "todo": 545,
+        "web": 549,
+        "skill": 543,
+        "fsSearch": 524
       }
     },
     {
@@ -448,31 +448,31 @@
         "allowedAgentPresets": []
       },
       "sourceRefs": [
-        561,
-        582,
-        585,
-        588,
-        591,
-        592,
-        593,
-        594,
+        574,
+        595,
         598,
-        617,
-        619,
-        623
+        601,
+        604,
+        605,
+        606,
+        607,
+        611,
+        630,
+        632,
+        636
       ],
       "toolLines": {
-        "read": 588,
-        "write": 591,
-        "edit": 592,
-        "applyPatch": 593,
-        "bash": 582,
-        "pwsh": 585,
-        "search": 594,
-        "todo": 619,
-        "web": 623,
-        "skill": 617,
-        "fsSearch": 598
+        "read": 601,
+        "write": 604,
+        "edit": 605,
+        "applyPatch": 606,
+        "bash": 595,
+        "pwsh": 598,
+        "search": 607,
+        "todo": 632,
+        "web": 636,
+        "skill": 630,
+        "fsSearch": 611
       }
     }
   ],
@@ -480,75 +480,75 @@
     "tools": {
       "read": [
         46,
-        168,
-        255,
-        337,
-        419,
-        501,
-        588
+        181,
+        268,
+        350,
+        432,
+        514,
+        601
       ],
       "write": [
-        171,
-        340,
-        422,
-        504,
-        591
+        184,
+        353,
+        435,
+        517,
+        604
       ],
       "edit": [
-        172,
-        341,
-        423,
-        505,
-        592
+        185,
+        354,
+        436,
+        518,
+        605
       ],
       "applyPatch": [
         49,
-        173,
-        258,
-        342,
-        424,
-        506,
-        593
+        186,
+        271,
+        355,
+        437,
+        519,
+        606
       ],
       "bash": [
         40,
-        162,
-        249,
-        331,
-        413,
-        495,
-        582
+        175,
+        262,
+        344,
+        426,
+        508,
+        595
       ],
       "pwsh": [
         43,
-        165,
-        252,
-        334,
-        416,
-        498,
-        585
+        178,
+        265,
+        347,
+        429,
+        511,
+        598
       ],
       "search": [
         50,
-        174,
-        259,
-        343,
-        425,
-        507,
-        594
+        187,
+        272,
+        356,
+        438,
+        520,
+        607
       ],
       "jobs": [
         54,
-        263
+        276
       ],
       "todo": [
         125,
-        199,
-        286,
-        368,
-        450,
-        532,
-        619
+        212,
+        299,
+        381,
+        463,
+        545,
+        632
       ],
       "askUser": [
         123
@@ -567,12 +567,12 @@
     "disabledTools": {
       "apply_patch": [
         49,
-        173,
-        258,
-        342,
-        424,
-        506,
-        593
+        186,
+        271,
+        355,
+        437,
+        519,
+        606
       ],
       "subagent_fork": [
         17,

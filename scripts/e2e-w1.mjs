@@ -164,12 +164,20 @@ async function main() {
   // 9) 回执闸门：缺 RECEIPT 的写岗交付被 block
   const receiptGuard = makePostExecuteReceiptGuard({ registry, config: { writerPresets: ['cto-builder'] } })
   const next = async () => ({ kind: 'accept' })
-  const blocked = await receiptGuard(
+  // 真机反馈 ③：subagent 立即返回的是「受理回执」，不能因此 block；只有文本里确有
+  // 不合规 RECEIPT 时才打回。缺回执由 office_gate 的 receipt-missing 兜住。
+  const accepted = await receiptGuard(
     { name: 'subagent', arguments: { agent_preset: 'cto-builder', prompt: '【任务卡 C2】x' } },
-    { content: [{ type: 'text', text: '做完了' }] },
+    { content: [{ type: 'text', text: 'started subagent worker' }] },
     next,
   )
-  check('写岗缺回执 → block', blocked.kind === 'block')
+  check('受理回执不拦（避免吞掉派工）', accepted.kind === 'accept')
+  const blocked = await receiptGuard(
+    { name: 'subagent', arguments: { agent_preset: 'cto-builder', prompt: '【任务卡 C2】x' } },
+    { content: [{ type: 'text', text: 'RECEIPT:\n- card: C9\n- changed: a.ts' }] },
+    next,
+  )
+  check('回执不合规 → block', blocked.kind === 'block')
   const readOnly = await receiptGuard(
     { name: 'subagent', arguments: { agent_preset: 'cto-qa', prompt: '【任务卡 C2】x' } },
     { content: [{ type: 'text', text: '无回执' }] },

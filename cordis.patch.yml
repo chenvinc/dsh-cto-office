@@ -136,6 +136,19 @@
           - id: tool-office
             name: '@deepseek-ai/dsh-tool-office'
 
+          # v2.0：判定工具与守卫只挂在 CTO 自己的作用域里（能力层剥夺，不做运行时收窄）。
+          # 关键：workspaceRoot 不在此配置 —— 宿主进程 cwd 是安装目录，工具要求显式 workspace。
+          - id: office-tools
+            name: '@swiper1881/dsh-cto-office/tools'
+            config:
+              maxConcurrentWriters: 1
+              writerPresets:
+                - cto-builder
+              granularity:
+                maxFiles: 10
+                maxLines: 400
+                maxBehaviors: 1
+
     # ── 架构师 ────────────────────────────────────────────────────────────
 # 设计意图（推断，作者未记录）：挂 tool-web（选型要查仓库外资料）、不挂 tool-jobs（调研不该转后台失联）；不挂 write/edit 属只读岗。
     - id: preset-cto-architect

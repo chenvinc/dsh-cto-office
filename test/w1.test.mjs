@@ -301,26 +301,34 @@ test('工件：verify 只要求 acceptance，contracts 可选', () => {
   } finally { cleanup() }
 })
 
-test('回执闸门：写岗缺回执 block，只读岗与无卡号放行', async () => {
+test('回执闸门：只校验「确有回执」的文本，绝不为没有回执而 block', async () => {
   const { dir, cleanup } = tmp()
   try {
     const store = new CardStore(dir)
     const card = makeCard({ cardId: 'C1', authorization: { mode: 'rw', include: ['api/**'] }, baseSha: null, acceptance: ['A1 可跑'] })
     card.artifactsVersion = { acceptance: 1 }
     store.save(card)
-    const guard = makePostExecuteReceiptGuard({ store, config: { writerPresets: ['cto-builder'] } })
+    const registry = { all: () => [store] }
+    const guard = makePostExecuteReceiptGuard({ registry, config: { writerPresets: ['cto-builder'] } })
     const next = async () => ({ kind: 'accept' })
+    const subagent = text => ({ name: 'subagent', arguments: { agent_preset: 'cto-builder', prompt: '【任务卡 C1】x' } })
 
-    const blocked = await guard({ name: 'subagent', arguments: { agent_preset: 'cto-builder', prompt: '【任务卡 C1】x' } }, { content: [{ type: 'text', text: '完成了' }] }, next)
-    assert.equal(blocked.kind, 'block')
-    assert.match(blocked.feedback.map(b => b.text).join('\n'), /RECEIPT/)
+    // 真机反馈 ③：`subagent` 立即返回的是「started subagent X」受理回执，不能因此 block
+    const accepted = await guard(subagent('started subagent worker-c1'), { content: [{ type: 'text', text: 'started subagent worker-c1' }] }, next)
+    assert.equal(accepted.kind, 'accept', '受理回执不校验、不拦')
 
-    const passed = await guard({ name: 'subagent', arguments: { agent_preset: 'cto-builder', prompt: '【任务卡 C1】x' } }, { content: [{ type: 'text', text: GOOD_RECEIPT.replace('card: C1', 'card: C1') }] }, next)
-    assert.equal(passed.kind, 'accept')
+    // 工具本身报错时不能把真实错误换成「回执不合格」
+    const errored = await guard(subagent('has RECEIPT:'), { isError: true, content: [{ type: 'text', text: 'agent_preset not allowed' }] }, next)
+    assert.equal(errored.kind, 'accept', 'isError 必须放行，保住真实报错')
 
+    // 文本里确有回执但不合格 → 仍然打回
+    const bad = await guard(subagent('x'), { content: [{ type: 'text', text: 'RECEIPT:\n- card: C9\n- changed: a.ts' }] }, next)
+    assert.equal(bad.kind, 'block')
+    assert.match(bad.feedback.map(b => b.text).join('\n'), /RECEIPT/)
+
+    // 只读岗与非卡号派工一律放行
     const ro = await guard({ name: 'subagent', arguments: { agent_preset: 'cto-qa', prompt: '【任务卡 C1】x' } }, { content: [{ type: 'text', text: '无' }] }, next)
     assert.equal(ro.kind, 'accept')
-
     const noCard = await guard({ name: 'subagent', arguments: { agent_preset: 'cto-builder', prompt: '随便看看' } }, { content: [{ type: 'text', text: '无' }] }, next)
     assert.equal(noCard.kind, 'accept')
   } finally { cleanup() }
@@ -395,12 +403,11 @@ test('卡仓库：自述写 PASS 不解锁结算，且被统计为排除项', ()
   } finally { cleanup() }
 })
 
-// ── 宿主契约回归（真机安装暴露的两条） ──────────────────────────
-import { apply as applyPlugin } from '../index.js'
+// ── 宿主契约回归（真机安装暴露的三条） ──────────────────────────
+import { apply as applyToolsPlugin } from '../tools-plugin.js'
 
-test('apply 在「严格 ctx」下不抛：未 inject 的服务属性一律不得裸读', () => {
-  // 模拟 cordis：访问未 inject 的服务属性直接抛错
-  const registered = []
+test('tools-plugin 在「严格 ctx」下不抛：未 inject 的服务属性一律不得裸读', () => {
+  // 模拟 cordis：访问未 inject 的服务属性直接抛错（真机报过 timer / agentPresets）
   const strict = new Proxy({
     tools: { register: () => () => {} },
     on: () => {},
@@ -415,7 +422,43 @@ test('apply 在「严格 ctx」下不抛：未 inject 的服务属性一律不�
       return undefined
     },
   })
-  assert.doesNotThrow(() => applyPlugin(strict, {}))
+  assert.doesNotThrow(() => applyToolsPlugin(strict, {}))
+})
+
+test('参数声明必须是标准 JSON Schema（属性上不得写 required）', async () => {
+  const { buildTools } = await import('../lib/tools.js')
+  const tools = buildTools({}, { registry: { get: () => ({}) }, config: {} })
+  for (const [name, tool] of Object.entries(tools)) {
+    const params = tool.parameters
+    assert.equal(params.type, 'object', `${name}.parameters 应为对象 schema`)
+    assert.ok(Array.isArray(params.required ?? []) || params.required === undefined, `${name}: required 必须是数组`)
+    for (const [prop, spec] of Object.entries(params.properties ?? {})) {
+      assert.ok(!('required' in spec), `${name}.${prop}: 属性上不得写 required`)
+    }
+  }
+})
+
+test('参数规范化：字符串化的数组/整数被显式转换并留痕，非法类型直接拒', async () => {
+  const { buildTools } = await import('../lib/tools.js')
+  const store = { read: () => undefined, list: () => ({ cards: [], corrupt: [] }), evidenceSummary: () => ({ total: 0, bySource: {}, excluded: 0 }) }
+  const tools = buildTools({}, { registry: { get: () => store }, config: {} })
+  await assert.rejects(
+    () => tools.status.execute({ workspace: { bad: true } }),
+    /类型错误/,
+    '对象传给 string 必须报错，不能静默',
+  )
+  await assert.rejects(
+    () => tools.dispatch.execute({ workspace: '/tmp', cardId: 'C1', subject: 'x', mode: 'rw', include: 'not-json' }),
+    /类型错误|include/,
+  )
+})
+
+test('回执采集：从会话事件里识别 RECEIPT 块', async () => {
+  const { receiptTextOf, collectText } = await import('../lib/receipt-collector.js')
+  const withReceipt = { type: 'user/message', data: { content: [{ type: 'text', text: '完成\nRECEIPT:\n- card: C1' }] } }
+  assert.ok(receiptTextOf(withReceipt))
+  assert.equal(receiptTextOf({ type: 'x', data: { content: [{ type: 'text', text: '无' }] } }), null)
+  assert.ok(collectText({ a: ['x', { b: 'y' }] }).includes('y'))
 })
 
 test('输出 schema 用标准 JSON Schema 方言：required 在对象上，不在属性上', async () => {

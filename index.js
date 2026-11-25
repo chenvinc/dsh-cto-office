@@ -1,131 +1,21 @@
 /**
- * CTO 办公室 bundle 的 Host 半。
+ * CTO 办公室 bundle 的 Host 半（入口）。
  *
- * v2.0 一期 A / W1 起，本包不再只是「预设 + 技能 + 面板」的壳：
- * 它注册三个判定工具与两条 pre-execute 守卫，把「单写者、越界必现」从章程搬进宿主。
+ * 自 v2.0 W0 起，工具与守卫**不再挂在全局 host 半**，而是挂在
+ * `cto-office` 预设自己的 plugins 里（见 tools-plugin.js 与 cordis.patch.yml）。
  *
- * 设计约束（见 docs/dependency-manifest.md）：
- *  - 零 `@deepseek-ai/*` import。这些包在本机插件目录下会解析到 npx 缓存的旧 rc，
- *    与运行宿主版本不一致；所有能力通过 `ctx` 拿，工具定义用原生字面量。
- *  - 守卫自身出错必须放行，判定层不能把会话卡死。
+ * 原因（W0 真机反馈 ①）：全局注册 + 运行时 `when` 收窄会在拿不到 `agentPresets`
+ * 服务时 fail-open —— 结果是 standard 会话和 worker 子会话都能调用 `office_*`。
+ * 改为预设作用域后，隔离由组装层负责，不存在 fail-open 路径。
+ *
+ * 本文件保留 `apply` 是为了让 bundle patch 的 insert 能解析到本包（客户端半由
+ * package.json 的 `dsh.client` 声明）。
  */
-import { join } from 'node:path'
-import { StoreRegistry } from './lib/registry.js'
-import { buildTools } from './lib/tools.js'
-import { makePreExecuteGuard } from './lib/guards.js'
-import { Supervisor } from './lib/supervisor.js'
-import { makePostExecuteReceiptGuard } from './lib/receipt-guard.js'
 
 export const name = '@swiper1881/dsh-cto-office'
 
-/**
- * tools 是必需的；timer 用来挂超时监督器（宿主已有服务，不自建定时器）。
- * timer 缺失不应让插件加载失败，所以它不在 inject 里，而是运行时探测。
- */
-export const inject = ['tools']
+/** Host 侧不再依赖任何服务。 */
+export const inject = []
 
-const DEFAULTS = {
-  maxConcurrentWriters: 1,
-  writerPresets: ['cto-builder'],
-  granularity: { maxFiles: 10, maxLines: 400, maxBehaviors: 1 },
-  cardsDir: '.cto-office/cards',
-  supervisor: { enabled: true, pollIntervalMs: 15 * 60 * 1000, queuedAlertMs: 60 * 60 * 1000 },
-}
-
-function resolveConfig(config) {
-  const raw = config && typeof config === 'object' ? config : {}
-  const workspaceRoot = typeof raw.workspaceRoot === 'string' && raw.workspaceRoot
-    ? raw.workspaceRoot
-    : (typeof process.cwd === 'function' ? process.cwd() : '.')
-  return {
-    workspaceRoot,
-    maxConcurrentWriters: Number.isInteger(raw.maxConcurrentWriters) ? raw.maxConcurrentWriters : DEFAULTS.maxConcurrentWriters,
-    writerPresets: Array.isArray(raw.writerPresets) && raw.writerPresets.length ? raw.writerPresets : DEFAULTS.writerPresets,
-    granularity: { ...DEFAULTS.granularity, ...(raw.granularity ?? {}) },
-    cardsDir: typeof raw.cardsDir === 'string' && raw.cardsDir ? raw.cardsDir : DEFAULTS.cardsDir,
-    supervisor: { ...DEFAULTS.supervisor, ...(raw.supervisor ?? {}) },
-  }
-}
-
-/**
- * 该 step 是否属于 CTO（root 预设）。
- *
- * 用 `ToolRegistrationOptions.when` 把三个工具收窄到 CTO 一个岗位 —— 否则办公室里的
- * 每个角色都会看到 office_dispatch，等于把派工权扩散出去（与「只有根能派工」冲突）。
- *
- * 取不到预设信息时**放行**：判定层宁可少收窄，也不能让工具凭空消失（§6.1 失败即放行）。
- */
-function makeWhenCto(ap) {
-  return (activation) => {
-    if (!ap?.presetForSession) return true
-    try {
-      const preset = ap.presetForSession(activation.agent.session)
-      if (typeof preset !== 'string' || preset.length === 0) return true
-      return preset === 'cto-office'
-    } catch {
-      return true
-    }
-  }
-}
-
-export function apply(ctx, config) {
-  const resolved = resolveConfig(config)
-  // 仓库按工作区懒建：apply 时宿主还不知道用户工作区，绝不能用进程 cwd 兜底。
-  const registry = new StoreRegistry({ cardsDir: resolved.cardsDir })
-
-  // 超时监督器按工作区各一个（一期 A 只做「QUEUED 持有者 idle」最小报警）。
-  const supervisors = new Map()
-  const supervisorFor = workspace => {
-    if (resolved.supervisor.enabled === false) return undefined
-    let sup = supervisors.get(workspace)
-    if (!sup) {
-      sup = new Supervisor(registry.get(workspace), {
-        pollIntervalMs: resolved.supervisor.pollIntervalMs,
-        queuedAlertMs: resolved.supervisor.queuedAlertMs,
-      })
-      supervisors.set(workspace, sup)
-    }
-    return sup
-  }
-  resolved.supervisorInstance = { get: supervisorFor }
-
-  const tools = buildTools(ctx, { registry, config: resolved })
-
-  // agentPresets 是可选依赖：拿不到就不收窄（放行），不因此让整个插件加载失败。
-  const ap = (() => { try { return ctx.agentPresets } catch { return undefined } })()
-  const when = makeWhenCto(ap)
-
-  let dispose = () => {}
-  ctx.effect?.(() => {
-    for (const tool of [tools.dispatch, tools.gate, tools.release, tools.status, tools.artifact, tools.note]) {
-      dispose = ctx.tools.register(tool, { when })
-    }
-    return () => { try { dispose() } catch {} }
-  })
-
-  ctx.on('tools/pre-execute', makePreExecuteGuard({ registry, config: resolved }))
-  ctx.on('tools/post-execute', makePostExecuteReceiptGuard({ registry, config: resolved }))
-
-  // 挂到宿主 timer 服务；没有就明确跳过（不偷偷改成 setInterval）。
-  // 注意：cordis 里未声明 inject 就读 `ctx.timer` 会抛
-  //   `cannot get property "timer" without inject`
-  // 所以必须 try/catch —— 这是真机安装才暴露的第二条（见 docs/W0-实测清单.md）。
-  let timer
-  try { timer = ctx.timer } catch { timer = undefined }
-  if (resolved.supervisor.enabled !== false && timer && typeof timer.interval === 'function') {
-    const stopTimer = timer.interval(() => {
-      for (const workspace of registry.workspaces()) {
-        try {
-          const sup = supervisorFor(workspace)
-          for (const alert of sup.tick()) {
-            try { ctx.log?.warn?.(alert.message) } catch {}
-          }
-        } catch {}
-      }
-    }, resolved.supervisor.pollIntervalMs)
-    ctx.effect?.(() => stopTimer)
-  }
-
-  // 供后续阶段（evidence 白名单、超时监督器）复用的内部句柄。
-  try { ctx.set?.('ctoOffice', { store, config: resolved }) } catch { /* 可选 */ }
-}
+/** 无行为；工具与守卫在预设作用域内注册。 */
+export function apply() {}

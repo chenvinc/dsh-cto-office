@@ -27,7 +27,8 @@
     "./client": "./client.js",
     "./cordis.patch.yml": "./cordis.patch.yml",
     "./skills/*": "./skills/*",
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./tools": "./tools-plugin.js"
   },
   "files": [
     "cordis.patch.yml",
@@ -38,7 +39,8 @@
     "test",
     "index.js",
     "client.js",
-    "README.md"
+    "README.md",
+    "tools-plugin.js"
   ],
   "engines": {
     "dsh": ">=0.2.2-rc.3",
