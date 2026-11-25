@@ -256,9 +256,12 @@ test('回执：版本漂移与越界都要报出来（返工责任可归因）',
   assert.equal(r.ok, false)
   assert.ok(r.problems.some(p => /acceptance=2/.test(p) && /3/.test(p)), '要说明读的是哪版、卡是哪版')
 
+  // 越界不由回执闸门判（否则 worker 会学会隐瞒）；回执只如实申报，越界结论交给 gate。
+  const cardV1 = { ...card, artifactsVersion: { acceptance: 1 } }
   const outOfScope = GOOD_RECEIPT.replace('changed: api/a.ts', 'changed: shared/types.ts')
-  const r2 = validateReceipt(outOfScope, card)
-  assert.ok(r2.problems.some(p => /shared\/types.ts/.test(p)))
+  const r2 = validateReceipt(outOfScope, cardV1)
+  assert.equal(r2.ok, true, '格式合规就放行，不因越界拒绝回执')
+  assert.deepEqual(r2.parsed.outOfScope, ['shared/types.ts'], '但要标出越界，供 gate 用')
 })
 
 test('回执：卡号从派工 prompt 的【任务卡 X】取', () => {
@@ -321,4 +324,27 @@ test('回执闸门：写岗缺回执 block，只读岗与无卡号放行', async
     const noCard = await guard({ name: 'subagent', arguments: { agent_preset: 'cto-builder', prompt: '随便看看' } }, { content: [{ type: 'text', text: '无' }] }, next)
     assert.equal(noCard.kind, 'accept')
   } finally { cleanup() }
+})
+
+// ── 回执与 git 事实的交叉核对 ────────────────────────────────────
+import { crossCheckReceipt } from '../lib/card.js'
+
+test('交叉核对：漏报、虚报、缺回执三种都要抓', () => {
+  const base = { cardId: 'C1', authorization: { mode: 'rw', include: ['api/**'], deny: [], exclusive: [] } }
+  const facts = { changed: [{ path: 'api/a.ts' }, { path: 'api/b.ts' }], untracked: [] }
+
+  const under = crossCheckReceipt({ ...base, lastReceipt: { changed: ['api/a.ts'], scope: [] } }, facts)
+  assert.deepEqual(under.map(v => v.kind + ':' + v.path), ['receipt-underclaim:api/b.ts'], '声明少了')
+
+  const over = crossCheckReceipt({ ...base, lastReceipt: { changed: ['api/a.ts', 'api/ghost.ts'], scope: ['api/b.ts'] } }, facts)
+  assert.deepEqual(over.map(v => v.kind + ':' + v.path), ['receipt-overclaim:api/ghost.ts'], '声明多了')
+
+  const missing = crossCheckReceipt({ ...base, lastReceipt: null }, facts)
+  assert.deepEqual(missing.map(v => v.kind), ['receipt-missing'])
+
+  const ro = crossCheckReceipt({ cardId: 'C2', authorization: { mode: 'ro' }, lastReceipt: null }, facts)
+  assert.equal(ro.length, 0, '只读卡不要求回执')
+
+  const aligned = crossCheckReceipt({ ...base, lastReceipt: { changed: ['api/a.ts'], scope: ['api/b.ts'] } }, facts)
+  assert.equal(aligned.length, 0, 'changed ∪ scope 覆盖事实即对齐')
 })

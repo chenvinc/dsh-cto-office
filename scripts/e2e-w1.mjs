@@ -109,8 +109,38 @@ async function main() {
 
   appendFileSync(join(dir, 'app', 'p.tsx'), 'export const Q = 2\n')
   git('add', '-A'); git('commit', '-qm', 'in scope')
+  const receiptGuard2 = makePostExecuteReceiptGuard({ store, config: { writerPresets: ['cto-builder'] } })
+  const c2Receipt = [
+    'RECEIPT:',
+    '- card: C2',
+    '- artifactsVersion: acceptance=1',
+    '- changed: app/p.tsx',
+    '- acceptance:',
+    '  - A1 PASS 证据：pnpm test → 3 passed',
+    'SELF-CHECK:',
+    '- build: pnpm build → 0',
+    '- tests: pnpm test → 3 passed',
+    '- scope: app/p.tsx',
+    '- gaps: 无',
+  ].join('\n')
+  const receiptDecision = await receiptGuard2(
+    { name: 'subagent', arguments: { agent_preset: 'cto-builder', prompt: '【任务卡 C2】x' } },
+    { content: [{ type: 'text', text: c2Receipt }] },
+    async () => ({ kind: 'accept' }),
+  )
+  check('合规回执被接受并记账', receiptDecision.kind === 'accept' && !!store.read('C2').lastReceipt)
+
   const g2 = await tools.gate.execute({ workspace: W, cardId: 'C2' })
-  check('授权内改动 → PASS', g2.verdict === 'PASS', JSON.stringify(g2.stats))
+  check('授权内改动 + 回执对齐 → PASS', g2.verdict === 'PASS', JSON.stringify(g2.stats))
+
+  // 回执与事实不一致 → 不许过闸
+  store.recordReceipt('C2', { changed: ['app/p.tsx', 'app/ghost.tsx'], scope: [], acceptance: [], artifactsVersion: { acceptance: 1 } })
+  const g3 = await tools.gate.execute({ workspace: W, cardId: 'C2' })
+  check('回执虚报 → CHANGES', g3.verdict === 'CHANGES' && g3.violations.some(v => v.kind === 'receipt-overclaim'))
+  store.recordReceipt('C2', { changed: [], scope: [], acceptance: [], artifactsVersion: { acceptance: 1 } })
+  const g4 = await tools.gate.execute({ workspace: W, cardId: 'C2' })
+  check('回执漏报 → CHANGES', g4.verdict === 'CHANGES' && g4.violations.some(v => v.kind === 'receipt-underclaim'))
+  store.recordReceipt('C2', { changed: ['app/p.tsx'], scope: [], acceptance: [], artifactsVersion: { acceptance: 1 } })
   const evBefore = store.countEvidence('C2')
   await tools.gate.execute({ workspace: W, cardId: 'C2' })
   check('重复判定 → 新增一件而非覆盖', store.countEvidence('C2') === evBefore + 1, `${evBefore} → ${store.countEvidence('C2')}`)
