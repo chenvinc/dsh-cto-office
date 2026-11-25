@@ -21,7 +21,9 @@
 | D9 | `worktrees.create` 返回 `{path, branch, baseCommit, repositoryRoot}` | `@deepseek-ai/dsh-experimental-worktree`（**可选 bundle**，宿主不一定已挂） | 二期 worktree 无法建立 | 二期缩减为「状态机 + 断点恢复」，不建 worktree（§7.3 已计） | 待复验 |
 | D10 | `storageDomain.open(spec)` | Host Service 目录 → `storageDomain` | 备选持久化通道失效 | 直接写 `.cto-office/*.json`（本方案主路径就是文件，不依赖它） | 低风险 |
 | D11 | `session-checkpoint-policy` 行存在 | 宿主 `dsh-base` rows | 检查点策略无法被 preset 覆盖 | 自建检查点文件（已是一期 A 设计） | 低风险 |
-| D12 | `@deepseek-ai/dsh-atomic-write` 的 `writeFileAtomic` | 包存在（零依赖），但**从插件目录解析会落到 npx 缓存 rc.1** | 用错版本、行为不一致 | **不依赖**：自实现 temp+fsync+rename+dir-fsync（§14.3） | **已处置** |
+| D12 | `@deepseek-ai/dsh-atomic-write` 的 `writeFileAtomic` | 包存在且可经安装锚点解析，**但源码明确写「Crash durability (fsync) is out of scope」**（含 `TODO(settings-atomic-durability)`） | 它是原子可见，不是崩溃持久：M-2 要处理的正是崩溃场景 | **偏离设计并说明原因**：保留自实现的 temp+fsync+rename+dir-fsync。若上游补上 fsync，本实现可删约 40 行 | **已确证（不满足需求）** |
+| D19 | `picomatch@4.0.7`（宿主自带，全局匹配器） | `createRequire(DSH_INSTALL_DIR/package.json)('picomatch')` | 解析不到则退回内置最小匹配器（已实测两条路径都能跑通） | `lib/glob.js` 优先用 picomatch，`matchBackend()` 自报当前后端 | **已接入** |
+| D20 | `ctx.timer.interval`（宿主 timer 服务） | `cordis-plugin-timer` 已挂载 | 超时监督器无法起定时器 | 探测不到就**明确跳过**，不改用 `setInterval` 偷跑 | **已接入** |
 | D13 | `tokenMeter.measure / contextPressure` | Host Service 目录 → `tokenMeter` | 成本三元组的 token 读数缺失 | 只记档位与卡时长，成本列显示“不可用” | 待复验 |
 | D14 | `subagent` 工具的 `modelSelection` / `agentOptions` | `patch:113-114`；`@deepseek-ai/dsh-tool-subagent` `src/index.ts`（`agentOptions?: AgentOptions`、`capabilities.agentOptions`） | 岗位档位无法生效 | 退化为“每次派工显式传档位”，最坏“全局统一档位” | 待实测（W0 ⑤⑥） |
 | D15 | `pre-execute` **不能改写工具参数** | `@deepseek-ai/dsh-tools` 源码注释："Input rewriting is excluded" | `office_dispatch` 的“由自己完成整个派工动作”失去前提 | 改为“拦裸 subagent + 要求 CTO 走 office_dispatch” | 待复验 |
@@ -59,3 +61,4 @@ const checks = [
 | 日期 | DSH 版本 | 结论 | 处理 |
 |---|---|---|---|
 | 2026-11-26 | 0.2.2-rc.5 | 建立骨架；D12 已实测失效（npx rc.1 解析）；D16 已确证 | D12 自实现；其余待 W0 复验 |
+| 2026-11-26 | 0.2.2-rc.5 | W1 实现期复核：**D12 修正**——包可经安装锚点解析，但源码自认不提供 fsync；**新增 D19（picomatch 已接入）/ D20（timer 已接入）** | D12 保留自实现并写明偏离理由；D19/D20 改为「用系统的」 |

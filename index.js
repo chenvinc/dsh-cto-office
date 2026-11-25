@@ -13,10 +13,14 @@ import { join } from 'node:path'
 import { CardStore } from './lib/store.js'
 import { buildTools } from './lib/tools.js'
 import { makePreExecuteGuard } from './lib/guards.js'
+import { Supervisor } from './lib/supervisor.js'
 
 export const name = '@swiper1881/dsh-cto-office'
 
-/** 只依赖工具注册表；其余能力（git）走 node 内建。 */
+/**
+ * tools 是必需的；timer 用来挂超时监督器（宿主已有服务，不自建定时器）。
+ * timer 缺失不应让插件加载失败，所以它不在 inject 里，而是运行时探测。
+ */
 export const inject = ['tools']
 
 const DEFAULTS = {
@@ -24,6 +28,7 @@ const DEFAULTS = {
   writerPresets: ['cto-builder'],
   granularity: { maxFiles: 10, maxLines: 400, maxBehaviors: 1 },
   cardsDir: '.cto-office/cards',
+  supervisor: { enabled: true, pollIntervalMs: 15 * 60 * 1000, queuedAlertMs: 60 * 60 * 1000 },
 }
 
 function resolveConfig(config) {
@@ -37,6 +42,7 @@ function resolveConfig(config) {
     writerPresets: Array.isArray(raw.writerPresets) && raw.writerPresets.length ? raw.writerPresets : DEFAULTS.writerPresets,
     granularity: { ...DEFAULTS.granularity, ...(raw.granularity ?? {}) },
     cardsDir: typeof raw.cardsDir === 'string' && raw.cardsDir ? raw.cardsDir : DEFAULTS.cardsDir,
+    supervisor: { ...DEFAULTS.supervisor, ...(raw.supervisor ?? {}) },
   }
 }
 
@@ -64,17 +70,38 @@ function makeWhenCto(ap) {
 export function apply(ctx, config) {
   const resolved = resolveConfig(config)
   const store = new CardStore(resolved.workspaceRoot, { cardsDir: resolved.cardsDir })
+
+  // 超时监督器：一期 A 只做「QUEUED 持有者 idle」这一条最小报警。
+  let supervisor
+  if (resolved.supervisor.enabled !== false) {
+    supervisor = new Supervisor(store, {
+      pollIntervalMs: resolved.supervisor.pollIntervalMs,
+      queuedAlertMs: resolved.supervisor.queuedAlertMs,
+    })
+    resolved.supervisorInstance = supervisor
+  }
+
   const tools = buildTools(ctx, { store, config: resolved })
 
   // agentPresets 是可选依赖：拿不到就不收窄（放行），不因此让整个插件加载失败。
   const ap = (() => { try { return ctx.agentPresets } catch { return undefined } })()
   const when = makeWhenCto(ap)
 
-  for (const tool of [tools.dispatch, tools.gate, tools.release]) {
-    ctx.tools.register(tool, { when })
-  }
+  let dispose = () => {}
+  ctx.effect?.(() => {
+    for (const tool of [tools.dispatch, tools.gate, tools.release, tools.status]) {
+      dispose = ctx.tools.register(tool, { when })
+    }
+    return () => { try { dispose() } catch {} }
+  })
 
   ctx.on('tools/pre-execute', makePreExecuteGuard({ store, config: resolved }))
+
+  // 挂到宿主 timer 服务；没有就明确跳过（不偷偷改成 setInterval）。
+  if (supervisor) {
+    const stopTimer = supervisor.attach(ctx)
+    ctx.effect?.(() => stopTimer)
+  }
 
   // 供后续阶段（evidence 白名单、超时监督器）复用的内部句柄。
   try { ctx.set?.('ctoOffice', { store, config: resolved }) } catch { /* 可选 */ }

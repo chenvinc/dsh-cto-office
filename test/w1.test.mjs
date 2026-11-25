@@ -169,3 +169,54 @@ test('证据：一件一文件，重复写幂等命中', () => {
     assert.equal(readJsonStrict(first.path).source, 'git-plumbing')
   } finally { cleanup() }
 })
+
+// ── W1e 超时监督器 ────────────────────────────────────────────────
+import { Supervisor } from '../lib/supervisor.js'
+
+test('监督器：持有者 idle 超阈值才报警，且报警对象是持有者', () => {
+  const { dir, cleanup } = tmp()
+  try {
+    const store = new CardStore(dir)
+    const t0 = 1_000_000
+    const holder = makeCard({ cardId: 'C1', authorization: { mode: 'rw', include: ['db/**'] }, baseSha: 'a', now: t0 })
+    store.save(holder, t0)
+    store.transition(holder, STATES.DISPATCHED); store.save(holder, t0)
+    const waiter = makeCard({ cardId: 'C2', authorization: { mode: 'rw', include: ['app/**'] }, baseSha: 'a', now: t0 })
+    waiter.blockedBy = { cardId: 'C1', reason: 'serial-limit' }
+    store.save(waiter, t0)
+
+    const fresh = new Supervisor(store, { queuedAlertMs: 3_600_000, now: () => t0 })
+    assert.equal(fresh.tick().length, 0, '刚 idle 不该报警')
+
+    const stale = new Supervisor(store, { queuedAlertMs: 3_600_000, now: () => t0 + 90 * 60_000 })
+    const alerts = stale.tick()
+    assert.equal(alerts.length, 1)
+    assert.equal(alerts[0].cardId, 'C2', '报警针对等待卡')
+    assert.equal(alerts[0].blockedBy, 'C1', '但message点出持有者')
+    assert.match(alerts[0].message, /C1 已 idle 90 分钟/)
+
+    assert.equal(stale.tick().length, 0, '同一原因不重复刷')
+    assert.equal(stale.pending().length, 1)
+    assert.equal(stale.ack(), 1)
+    assert.equal(stale.pending().length, 0)
+  } finally { cleanup() }
+})
+
+test('监督器：持有者消失也要报', () => {
+  const { dir, cleanup } = tmp()
+  try {
+    const store = new CardStore(dir)
+    const wait = makeCard({ cardId: 'C2', authorization: { mode: 'rw' }, baseSha: 'a' })
+    wait.blockedBy = { cardId: 'GONE', reason: 'serial-limit' }
+    store.save(wait)
+    const sup = new Supervisor(store, { now: () => Date.now() })
+    const alerts = sup.tick()
+    assert.equal(alerts.length, 1)
+    assert.equal(alerts[0].reason, 'holder-missing')
+  } finally { cleanup() }
+})
+
+test('glob 后端自报：有宿主时用 picomatch，无宿主时兜底', async () => {
+  const { matchBackend } = await import('../lib/glob.js')
+  assert.ok(['picomatch', 'fallback'].includes(matchBackend()))
+})
