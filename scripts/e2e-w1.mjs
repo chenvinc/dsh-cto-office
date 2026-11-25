@@ -16,6 +16,7 @@ import { join } from 'node:path'
 import { CardStore } from '../lib/store.js'
 import { buildTools } from '../lib/tools.js'
 import { STATES } from '../lib/card.js'
+import { makePostExecuteReceiptGuard } from '../lib/receipt-guard.js'
 
 const results = []
 const check = (name, ok, detail = '') => {
@@ -46,11 +47,22 @@ async function main() {
   const tools = buildTools({}, { store, config: { maxConcurrentWriters: 1 } })
   const W = dir
 
+  // 0) 工件先于卡：没有验收基线不许派工
+  let refusedNoArtifact = false
+  try {
+    await tools.dispatch.execute({ workspace: W, cardId: 'C0', subject: 'x', mode: 'rw', include: ['db/**'], acceptance: ['A1 x'] })
+  } catch { refusedNoArtifact = true }
+  check('无验收基线 → 拒绝派工', refusedNoArtifact)
+
+  await tools.artifact.execute({ workspace: W, cardId: 'C1', action: 'write', kind: 'acceptance', content: 'A1 导入可跑' })
+  await tools.artifact.execute({ workspace: W, cardId: 'C1', action: 'write', kind: 'contracts', content: 'api: POST /import' })
+
   // 1) 派工 C1（授权 db/**）
   const d1 = await tools.dispatch.execute({ workspace: W, cardId: 'C1', subject: '数据层', preset: 'cto-builder', mode: 'rw', include: ['db/**'], acceptance: ['A1 可跑'] })
   check('派工 C1 → DISPATCHED', d1.state === STATES.DISPATCHED, 'baseSha=' + d1.baseSha.slice(0, 7))
 
   // 2) 串行名额：C2 必须 QUEUED
+  await tools.artifact.execute({ workspace: W, cardId: 'C2', action: 'write', kind: 'acceptance', content: 'A1 空态有引导' })
   const d2 = await tools.dispatch.execute({ workspace: W, cardId: 'C2', subject: '导入页', preset: 'cto-builder', mode: 'rw', include: ['app/**'], acceptance: ['A1 空态'] })
   check('第二个写卡 → QUEUED（serial-limit）', d2.state === STATES.QUEUED && d2.blockedBy?.reason === 'serial-limit', JSON.stringify(d2.blockedBy))
 
@@ -80,6 +92,15 @@ async function main() {
   const c2 = store.read('C2')
   check('终止态释放锁 → C2 解阻', c2.blockedBy === null, JSON.stringify(c2.blockedBy))
 
+  // 6b) 进行期禁改工件（M-14）
+  let artifactLocked = false
+  try {
+    await tools.artifact.execute({ workspace: W, cardId: 'C2', action: 'write', kind: 'acceptance', content: 'A1 改口径' })
+  } catch (error) {
+    artifactLocked = /禁止|in progress|执行/.test(error.message)
+  }
+  check('卡执行中 → 禁止改验收基线', artifactLocked)
+
   // 7) 启动 C2（此刻才冻 baseSha，不含 C1 的改动）→ 授权内提交 → PASS → 结算
   const startC2 = await tools.dispatch.execute({ workspace: W, cardId: 'C2' })
   check('C2 启动时才冻结 baseSha（A3）', startC2.state === STATES.DISPATCHED && !!startC2.baseSha, 'baseSha=' + String(startC2.baseSha).slice(0, 7))
@@ -100,6 +121,22 @@ async function main() {
   // 8) 证据：每次判定一件一文件（不覆盖、不合并）
   const evC1 = store.countEvidence('C1')
   check('C1 判定一次 → 一份证据', evC1 === 1, 'count=' + evC1)
+
+  // 9) 回执闸门：缺 RECEIPT 的写岗交付被 block
+  const receiptGuard = makePostExecuteReceiptGuard({ store, config: { writerPresets: ['cto-builder'] } })
+  const next = async () => ({ kind: 'accept' })
+  const blocked = await receiptGuard(
+    { name: 'subagent', arguments: { agent_preset: 'cto-builder', prompt: '【任务卡 C2】x' } },
+    { content: [{ type: 'text', text: '做完了' }] },
+    next,
+  )
+  check('写岗缺回执 → block', blocked.kind === 'block')
+  const readOnly = await receiptGuard(
+    { name: 'subagent', arguments: { agent_preset: 'cto-qa', prompt: '【任务卡 C2】x' } },
+    { content: [{ type: 'text', text: '无回执' }] },
+    next,
+  )
+  check('只读岗不要求回执', readOnly.kind === 'accept')
 
   rmSync(dir, { recursive: true, force: true })
 

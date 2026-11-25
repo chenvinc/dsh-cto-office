@@ -14,6 +14,7 @@ import { CardStore } from './lib/store.js'
 import { buildTools } from './lib/tools.js'
 import { makePreExecuteGuard } from './lib/guards.js'
 import { Supervisor } from './lib/supervisor.js'
+import { makePostExecuteReceiptGuard } from './lib/receipt-guard.js'
 
 export const name = '@swiper1881/dsh-cto-office'
 
@@ -89,13 +90,14 @@ export function apply(ctx, config) {
 
   let dispose = () => {}
   ctx.effect?.(() => {
-    for (const tool of [tools.dispatch, tools.gate, tools.release, tools.status]) {
+    for (const tool of [tools.dispatch, tools.gate, tools.release, tools.status, tools.artifact]) {
       dispose = ctx.tools.register(tool, { when })
     }
     return () => { try { dispose() } catch {} }
   })
 
   ctx.on('tools/pre-execute', makePreExecuteGuard({ store, config: resolved }))
+  ctx.on('tools/post-execute', makePostExecuteReceiptGuard({ store, config: resolved }))
 
   // 挂到宿主 timer 服务；没有就明确跳过（不偷偷改成 setInterval）。
   if (supervisor) {

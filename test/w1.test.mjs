@@ -220,3 +220,105 @@ test('glob 后端自报：有宿主时用 picomatch，无宿主时兜底', async
   const { matchBackend } = await import('../lib/glob.js')
   assert.ok(['picomatch', 'fallback'].includes(matchBackend()))
 })
+
+// ── W2 工件层与回执闸门 ──────────────────────────────────────────
+import { ArtifactStore, ArtifactError } from '../lib/artifacts.js'
+import { validateReceipt, parseReceipt, cardIdFromPrompt } from '../lib/receipt.js'
+import { makePostExecuteReceiptGuard, resultText } from '../lib/receipt-guard.js'
+
+const GOOD_RECEIPT = `RECEIPT:
+- card: C1
+- artifactsVersion: acceptance=1
+- changed: api/a.ts
+- acceptance:
+  - A1 PASS 证据：pnpm test → 5 passed
+SELF-CHECK:
+- build: pnpm build → 0
+- tests: pnpm test → 5 passed
+- scope: api/a.ts
+- gaps: 大文件未测`
+
+test('回执：合规通过；缺 SELF-CHECK 字段判缺失', () => {
+  const card = { cardId: 'C1', authorization: { mode: 'rw', include: ['api/**'], deny: [], exclusive: [] }, artifactsVersion: { acceptance: 1 }, acceptance: ['A1 可跑'] }
+  const ok = validateReceipt(GOOD_RECEIPT, card)
+  assert.equal(ok.ok, true, JSON.stringify(ok.problems))
+
+  const missingSelf = GOOD_RECEIPT.split('SELF-CHECK:')[0]
+  const bad = validateReceipt(missingSelf, card)
+  assert.equal(bad.ok, false)
+  assert.ok(bad.missing.includes('SELF-CHECK.gaps'))
+})
+
+test('回执：版本漂移与越界都要报出来（返工责任可归因）', () => {
+  const card = { cardId: 'C1', authorization: { mode: 'rw', include: ['api/**'], deny: [], exclusive: [] }, artifactsVersion: { acceptance: 3 }, acceptance: ['A1 可跑'] }
+  const stale = GOOD_RECEIPT.replace('acceptance=1', 'acceptance=2')
+  const r = validateReceipt(stale, card)
+  assert.equal(r.ok, false)
+  assert.ok(r.problems.some(p => /acceptance=2/.test(p) && /3/.test(p)), '要说明读的是哪版、卡是哪版')
+
+  const outOfScope = GOOD_RECEIPT.replace('changed: api/a.ts', 'changed: shared/types.ts')
+  const r2 = validateReceipt(outOfScope, card)
+  assert.ok(r2.problems.some(p => /shared\/types.ts/.test(p)))
+})
+
+test('回执：卡号从派工 prompt 的【任务卡 X】取', () => {
+  assert.equal(cardIdFromPrompt('【任务卡 C12】导入页'), 'C12')
+  assert.equal(cardIdFromPrompt('没有标记'), null)
+  assert.equal(parseReceipt('无关文本'), null)
+})
+
+test('工件：进行期（含 QUEUED）禁改，终止后可改', async () => {
+  const { dir, cleanup } = tmp()
+  try {
+    const store = new CardStore(dir)
+    const art = new ArtifactStore(store)
+    art.write('C1', 'acceptance', 'A1 可跑')
+    const card = makeCard({ cardId: 'C1', authorization: { mode: 'rw', include: ['api/**'] }, baseSha: null, acceptance: ['A1 可跑'] })
+    card.artifactsVersion = { acceptance: 1 }
+    store.save(card)
+
+    assert.throws(() => art.write('C1', 'acceptance', '改口径'), (e) => e instanceof ArtifactError && e.code === 'CARD_IN_PROGRESS')
+
+    store.transition(card, STATES.ABANDONED); store.save(card)
+    const w = art.write('C1', 'acceptance', 'A1 新口径')
+    assert.equal(w.version, 2)
+  } finally { cleanup() }
+})
+
+test('工件：verify 只要求 acceptance，contracts 可选', () => {
+  const { dir, cleanup } = tmp()
+  try {
+    const store = new CardStore(dir)
+    const art = new ArtifactStore(store)
+    const card = makeCard({ cardId: 'C2', authorization: { mode: 'rw', include: ['app/**'] }, baseSha: null, acceptance: ['A1 空态'] })
+    assert.equal(art.verify(card).ok, false, '没有 acceptance 不能通过')
+    art.write('C2', 'acceptance', 'A1 空态有引导')
+    card.artifactsVersion = { acceptance: 1 }
+    assert.equal(art.verify(card).ok, true, '没有 contracts 也应通过')
+  } finally { cleanup() }
+})
+
+test('回执闸门：写岗缺回执 block，只读岗与无卡号放行', async () => {
+  const { dir, cleanup } = tmp()
+  try {
+    const store = new CardStore(dir)
+    const card = makeCard({ cardId: 'C1', authorization: { mode: 'rw', include: ['api/**'] }, baseSha: null, acceptance: ['A1 可跑'] })
+    card.artifactsVersion = { acceptance: 1 }
+    store.save(card)
+    const guard = makePostExecuteReceiptGuard({ store, config: { writerPresets: ['cto-builder'] } })
+    const next = async () => ({ kind: 'accept' })
+
+    const blocked = await guard({ name: 'subagent', arguments: { agent_preset: 'cto-builder', prompt: '【任务卡 C1】x' } }, { content: [{ type: 'text', text: '完成了' }] }, next)
+    assert.equal(blocked.kind, 'block')
+    assert.match(blocked.feedback.map(b => b.text).join('\n'), /RECEIPT/)
+
+    const passed = await guard({ name: 'subagent', arguments: { agent_preset: 'cto-builder', prompt: '【任务卡 C1】x' } }, { content: [{ type: 'text', text: GOOD_RECEIPT.replace('card: C1', 'card: C1') }] }, next)
+    assert.equal(passed.kind, 'accept')
+
+    const ro = await guard({ name: 'subagent', arguments: { agent_preset: 'cto-qa', prompt: '【任务卡 C1】x' } }, { content: [{ type: 'text', text: '无' }] }, next)
+    assert.equal(ro.kind, 'accept')
+
+    const noCard = await guard({ name: 'subagent', arguments: { agent_preset: 'cto-builder', prompt: '随便看看' } }, { content: [{ type: 'text', text: '无' }] }, next)
+    assert.equal(noCard.kind, 'accept')
+  } finally { cleanup() }
+})
