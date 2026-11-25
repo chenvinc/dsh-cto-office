@@ -99,15 +99,22 @@ test('守卫：破坏提交边界的命令一律拒', () => {
   }
 })
 
-test('守卫：写者名额已满时拒第二个写岗，只读岗放行', async () => {
-  const store = { activeWriters: () => [{ cardId: 'C1' }] }
-  const guard = makePreExecuteGuard({ store, config: { maxConcurrentWriters: 1, writerPresets: ['cto-builder'] } })
-  const deny = await guard({ name: 'subagent', arguments: { agent_preset: 'cto-builder' } }, async () => ({ kind: 'allow' }))
-  assert.equal(deny.kind, 'deny')
-  const allow = await guard({ name: 'subagent', arguments: { agent_preset: 'cto-qa' } }, async () => ({ kind: 'allow' }))
-  assert.equal(allow.kind, 'allow', '只读岗不占写者名额')
-  assert.equal(targetPreset({ agent_preset: 'cto-builder' }), 'cto-builder')
-  assert.equal(targetPreset({ agentPreset: 'cto-qa' }), 'cto-qa')
+test('守卫：名额满时拒「别的卡」的写岗派工，只读岗放行', async () => {
+  const { dir, cleanup } = tmp()
+  try {
+    const store = new CardStore(dir)
+    const holder = makeCard({ cardId: 'C1', authorization: { mode: 'rw', include: ['a/**'] }, baseSha: 'a' })
+    store.save(holder); store.transition(holder, STATES.DISPATCHED); store.save(holder)
+    const guard = makePreExecuteGuard({ registry: { all: () => [store] }, config: { maxConcurrentWriters: 1, writerPresets: ['cto-builder'], defaultAgentPreset: 'cto-builder' } })
+    const next = async () => ({ kind: 'allow' })
+
+    const deny = await guard({ name: 'subagent', arguments: { agent_preset: 'cto-builder', prompt: '【任务卡 C9】x' } }, next)
+    assert.equal(deny.kind, 'deny')
+    const allow = await guard({ name: 'subagent', arguments: { agent_preset: 'cto-qa', prompt: '【任务卡 C1】审一下' } }, next)
+    assert.equal(allow.kind, 'allow', '只读岗不占写者名额')
+    assert.equal(targetPreset({ agent_preset: 'cto-builder' }), 'cto-builder')
+    assert.equal(targetPreset({ agentPreset: 'cto-qa' }), 'cto-qa')
+  } finally { cleanup() }
 })
 
 test('卡仓库：终止态释放互斥并解除 QUEUED 阻塞', () => {
@@ -474,4 +481,61 @@ test('输出 schema 用标准 JSON Schema 方言：required 在对象上，不�
       assert.ok(!('required' in spec), `${name}.${prop}: 属性上不能写 required（宿主会拒绝）`)
     }
   }
+})
+
+// ── 派工守卫：开卡即自锁 / 省略 preset 绕过（真机反馈 P0/P1）───────
+test('守卫：持锁那张卡自己派工必须放行（否则单卡永远开不了工）', async () => {
+  const { dir, cleanup } = tmp()
+  try {
+    const store = new CardStore(dir)
+    const card = makeCard({ cardId: 'C2', authorization: { mode: 'rw', include: ['README.md'] }, baseSha: 'a' })
+    store.save(card)
+    store.transition(card, STATES.DISPATCHED); store.save(card)
+    const registry = { all: () => [store] }
+    const guard = makePreExecuteGuard({ registry, config: { maxConcurrentWriters: 1, writerPresets: ['cto-builder'] } })
+    const next = async () => ({ kind: 'allow' })
+
+    const own = await guard({ name: 'subagent', arguments: { agent_preset: 'cto-builder', prompt: '【任务卡 C2】x' } }, next)
+    assert.equal(own.kind, 'allow', '派工的就是持锁卡 → 放行')
+
+    const other = await guard({ name: 'subagent', arguments: { agent_preset: 'cto-builder', prompt: '【任务卡 C9】x' } }, next)
+    assert.equal(other.kind, 'deny', '别的卡号 → 拒绝')
+  } finally { cleanup() }
+})
+
+test('守卫：省略 agent_preset 按默认写岗处理，不能借此绕过名额', async () => {
+  const { dir, cleanup } = tmp()
+  try {
+    const store = new CardStore(dir)
+    for (const [id, state] of [['C1', STATES.DISPATCHED]]) {
+      const c = makeCard({ cardId: id, authorization: { mode: 'rw', include: ['a/**'] }, baseSha: 'a' })
+      store.save(c); store.transition(c, state); store.save(c)
+    }
+    const registry = { all: () => [store] }
+    const guard = makePreExecuteGuard({ registry, config: { maxConcurrentWriters: 1, writerPresets: ['cto-builder'], defaultAgentPreset: 'cto-builder' } })
+    const next = async () => ({ kind: 'allow' })
+
+    const noPreset = await guard({ name: 'subagent', arguments: { prompt: '【任务卡 C9】x' } }, next)
+    assert.equal(noPreset.kind, 'deny', '不写 preset 也要按写岗拦')
+
+    const unnamed = await guard({ name: 'subagent', arguments: { agent_preset: 'cto-builder', prompt: '随便派' } }, next)
+    assert.equal(unnamed.kind, 'deny', '没写卡号也拦，并提示补标记')
+    assert.match(unnamed.reason, /【任务卡/)
+  } finally { cleanup() }
+})
+
+test('守卫：QUEUED 卡派工提示先启动', async () => {
+  const { dir, cleanup } = tmp()
+  try {
+    const store = new CardStore(dir)
+    const holder = makeCard({ cardId: 'C1', authorization: { mode: 'rw', include: ['a/**'] }, baseSha: 'a' })
+    store.save(holder); store.transition(holder, STATES.DISPATCHED); store.save(holder)
+    const queued = makeCard({ cardId: 'C2', authorization: { mode: 'rw', include: ['b/**'] }, baseSha: 'a' })
+    queued.blockedBy = { cardId: 'C1', reason: 'serial-limit' }
+    store.save(queued)
+    const guard = makePreExecuteGuard({ registry: { all: () => [store] }, config: { maxConcurrentWriters: 1, writerPresets: ['cto-builder'] } })
+    const decision = await guard({ name: 'subagent', arguments: { agent_preset: 'cto-builder', prompt: '【任务卡 C2】x' } }, async () => ({ kind: 'allow' }))
+    assert.equal(decision.kind, 'deny')
+    assert.match(decision.reason, /QUEUED/)
+  } finally { cleanup() }
 })

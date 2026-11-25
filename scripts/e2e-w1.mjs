@@ -18,6 +18,7 @@ import { StoreRegistry } from '../lib/registry.js'
 import { buildTools } from '../lib/tools.js'
 import { STATES } from '../lib/card.js'
 import { makePostExecuteReceiptGuard } from '../lib/receipt-guard.js'
+import { makePreExecuteGuard } from '../lib/guards.js'
 
 const results = []
 const check = (name, ok, detail = '') => {
@@ -62,6 +63,24 @@ async function main() {
   // 1) 派工 C1（授权 db/**）
   const d1 = await tools.dispatch.execute({ workspace: W, cardId: 'C1', subject: '数据层', preset: 'cto-builder', mode: 'rw', include: ['db/**'], acceptance: ['A1 可跑'] })
   check('派工 C1 → DISPATCHED', d1.state === STATES.DISPATCHED, 'baseSha=' + d1.baseSha.slice(0, 7))
+
+  // 1b) 真机反馈 P0「开卡即自锁」：持锁卡自己派工必须放行
+  const slotGuard = makePreExecuteGuard({ registry, config: { maxConcurrentWriters: 1, writerPresets: ['cto-builder'], defaultAgentPreset: 'cto-builder' } })
+  const ownDispatch = await slotGuard(
+    { name: 'subagent', arguments: { agent_preset: 'cto-builder', prompt: '【任务卡 C1】导入 API' } },
+    async () => ({ kind: 'allow' }),
+  )
+  check('持锁卡自己的派工放行（不自锁）', ownDispatch.kind === 'allow')
+  const otherDispatch = await slotGuard(
+    { name: 'subagent', arguments: { agent_preset: 'cto-builder', prompt: '【任务卡 C9】别人' } },
+    async () => ({ kind: 'allow' }),
+  )
+  check('别的卡号仍被名额拦下', otherDispatch.kind === 'deny')
+  const noPresetDispatch = await slotGuard(
+    { name: 'subagent', arguments: { prompt: '【任务卡 C9】省略 preset' } },
+    async () => ({ kind: 'allow' }),
+  )
+  check('省略 preset 不能绕过名额', noPresetDispatch.kind === 'deny')
 
   // 2) 串行名额：C2 必须 QUEUED
   await tools.artifact.execute({ workspace: W, cardId: 'C2', action: 'write', kind: 'acceptance', content: 'A1 空态有引导' })

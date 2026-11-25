@@ -26,6 +26,9 @@ export const inject = ['tools']
 const DEFAULTS = {
   maxConcurrentWriters: 1,
   writerPresets: ['cto-builder'],
+  // 宿主 `subagent` 的默认 preset（patch 里 delegation.agentPreset = cto-builder）。
+  // 省略 agent_preset 时按写岗处理，否则一个参数就能绕过两道守卫。
+  defaultAgentPreset: 'cto-builder',
   granularity: { maxFiles: 10, maxLines: 400, maxBehaviors: 1 },
   cardsDir: '.cto-office/cards',
   supervisor: { enabled: true, pollIntervalMs: 15 * 60 * 1000, queuedAlertMs: 60 * 60 * 1000 },
@@ -37,6 +40,7 @@ function resolveConfig(config) {
     workspaceRoot: typeof raw.workspaceRoot === 'string' && raw.workspaceRoot ? raw.workspaceRoot : undefined,
     maxConcurrentWriters: Number.isInteger(raw.maxConcurrentWriters) ? raw.maxConcurrentWriters : DEFAULTS.maxConcurrentWriters,
     writerPresets: Array.isArray(raw.writerPresets) && raw.writerPresets.length ? raw.writerPresets : DEFAULTS.writerPresets,
+    defaultAgentPreset: typeof raw.defaultAgentPreset === 'string' && raw.defaultAgentPreset ? raw.defaultAgentPreset : DEFAULTS.defaultAgentPreset,
     granularity: { ...DEFAULTS.granularity, ...(raw.granularity ?? {}) },
     cardsDir: typeof raw.cardsDir === 'string' && raw.cardsDir ? raw.cardsDir : DEFAULTS.cardsDir,
     supervisor: { ...DEFAULTS.supervisor, ...(raw.supervisor ?? {}) },
