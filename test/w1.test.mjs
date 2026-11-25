@@ -539,3 +539,44 @@ test('守卫：QUEUED 卡派工提示先启动', async () => {
     assert.match(decision.reason, /QUEUED/)
   } finally { cleanup() }
 })
+
+// ── git 路径转义回归（C4）：非 ASCII 路径必须原样返回 ──────────────
+import { execFileSync } from 'node:child_process'
+import { headSha, collectFacts, diffEntries } from '../lib/git.js'
+
+test('git: 非 ASCII 路径不被 core.quotePath 转义（中文路径原样返回）', async () => {
+  const { dir, cleanup } = tmp()
+  try {
+    const g = args => execFileSync('git', [
+      '-c', 'user.name=cto-w1', '-c', 'user.email=w1@example.com', '-c', 'commit.gpgsign=false',
+      ...args,
+    ], { cwd: dir, encoding: 'utf8' })
+    g(['init', '-q'])
+    writeFileSync(join(dir, 'README.md'), 'base\n')
+    g(['add', '-A'])
+    g(['commit', '-q', '-m', 'base'])
+    const baseSha = (await headSha(dir)).trim()
+
+    mkdirSync(join(dir, 'docs'), { recursive: true })
+    writeFileSync(join(dir, 'docs', 'W0-实测清单.md'), '中文内容\n')
+    g(['add', '-A'])
+    g(['commit', '-q', '-m', 'docs: 中文路径'])
+
+    // 前提校验：强制默认转义时确实会变成 "docs/W0-\345..."，否则这条用例失去回归意义
+    const escaped = execFileSync('git', ['-c', 'core.quotePath=true', 'diff', '--name-status', `${baseSha}..HEAD`], { cwd: dir, encoding: 'utf8' })
+    assert.match(escaped, /"docs\/W0-\\3/, '夹具必须能触发 git 默认的八进制转义')
+
+    assert.deepEqual(await diffEntries(dir, baseSha), [{ path: 'docs/W0-实测清单.md', status: 'A' }])
+
+    const facts = await collectFacts(dir, baseSha)
+    const path = facts.changed[0].path
+    assert.equal(path, 'docs/W0-实测清单.md')
+    assert.ok(!path.includes('"'), `不得带引号：${path}`)
+    assert.ok(!path.includes('\\'), `不得带八进制转义：${path}`)
+
+    // 工作区里的非 ASCII 未跟踪路径同样原样（statusEntries 一侧）
+    writeFileSync(join(dir, '未跟踪.md'), 'x\n')
+    const withUntracked = await collectFacts(dir, baseSha)
+    assert.ok(withUntracked.untracked.includes('未跟踪.md'), JSON.stringify(withUntracked.untracked))
+  } finally { cleanup() }
+})
