@@ -24,6 +24,24 @@
 | `cto-ux` | UI/UX 设计 | 只读 fs + 看图 + 联网 | 使用路径、摩擦点、交互规格 |
 | `cto-product` | 业务 | 只读 fs + bash + 联网 | 需求假设、成功指标、验收标准草案 |
 
+## 工具闭环（一卡全流程）
+
+一张卡走完就这四步，CTO 按顺序自己调：
+
+```bash
+# 1. 先落验收基线（编号验收标准），版本随开卡一起冻结
+office_artifact action=write cardId=C1 kind=acceptance content="A1 ..."
+# 2. 开卡：把当前 HEAD 冻成 baseSha，登记写入清单，占一个写者名额
+office_dispatch cardId=C1 subject="..." preset=cto-builder mode=rw include=["README.md"]
+# 3. 闸门：只读 git 事实（baseSha..HEAD 的 diff + 未提交状态），对清单判 PASS / CHANGES
+office_gate cardId=C1
+# 4. 结算：工作区干净且最近一次权威结论是 PASS 才能 settle，同时释放名额、解阻塞
+office_release cardId=C1 action=settle
+```
+
+> 工件只有 CTO 能写，卡进行期改验收会被直接拒——要改就作废重开。
+> 闸门不读自述：回执和 git 事实对不上，一样判 CHANGES。
+
 ## 和文渊阁的对应
 
 | 文渊阁 | 这里 |
