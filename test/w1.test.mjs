@@ -394,3 +394,41 @@ test('卡仓库：自述写 PASS 不解锁结算，且被统计为排除项', ()
     assert.equal(summary.excluded, 1)
   } finally { cleanup() }
 })
+
+// ── 宿主契约回归（真机安装暴露的两条） ──────────────────────────
+import { apply as applyPlugin } from '../index.js'
+
+test('apply 在「严格 ctx」下不抛：未 inject 的服务属性一律不得裸读', () => {
+  // 模拟 cordis：访问未 inject 的服务属性直接抛错
+  const registered = []
+  const strict = new Proxy({
+    tools: { register: () => () => {} },
+    on: () => {},
+    effect: fn => fn(),
+    log: { warn: () => {} },
+  }, {
+    get(target, prop) {
+      if (prop in target) return target[prop]
+      if (typeof prop === 'string' && /^(timer|agentPresets|workingDirectory|sandboxPolicy)$/.test(prop)) {
+        throw new Error(`cannot get property "${prop}" without inject`)
+      }
+      return undefined
+    },
+  })
+  assert.doesNotThrow(() => applyPlugin(strict, {}))
+})
+
+test('输出 schema 用标准 JSON Schema 方言：required 在对象上，不在属性上', async () => {
+  const { buildTools } = await import('../lib/tools.js')
+  const tools = buildTools({}, { registry: { get: () => ({}) }, config: {} })
+  for (const [name, tool] of Object.entries(tools)) {
+    const schema = tool.output?.schema
+    assert.ok(schema, `${name} 缺 output.schema`)
+    if (schema.required !== undefined) {
+      assert.ok(Array.isArray(schema.required), `${name}: required 必须是数组`)
+    }
+    for (const [prop, spec] of Object.entries(schema.properties ?? {})) {
+      assert.ok(!('required' in spec), `${name}.${prop}: 属性上不能写 required（宿主会拒绝）`)
+    }
+  }
+})

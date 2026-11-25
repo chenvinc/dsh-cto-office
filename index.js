@@ -107,8 +107,11 @@ export function apply(ctx, config) {
   ctx.on('tools/post-execute', makePostExecuteReceiptGuard({ registry, config: resolved }))
 
   // 挂到宿主 timer 服务；没有就明确跳过（不偷偷改成 setInterval）。
-  // 每轮轮询所有已建立的工作区仓库。
-  const timer = ctx.timer
+  // 注意：cordis 里未声明 inject 就读 `ctx.timer` 会抛
+  //   `cannot get property "timer" without inject`
+  // 所以必须 try/catch —— 这是真机安装才暴露的第二条（见 docs/W0-实测清单.md）。
+  let timer
+  try { timer = ctx.timer } catch { timer = undefined }
   if (resolved.supervisor.enabled !== false && timer && typeof timer.interval === 'function') {
     const stopTimer = timer.interval(() => {
       for (const workspace of registry.workspaces()) {
