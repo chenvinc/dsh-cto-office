@@ -152,6 +152,13 @@ async function main() {
   const evC1 = store.countEvidence('C1')
   check('C1 判定一次 → 一份证据', evC1 === 1, 'count=' + evC1)
 
+  // 8b) 自述不能当证据：cto-narrative 写 PASS 也解锁不了结算
+  await tools.note.execute({ workspace: W, cardId: 'C2', text: '我觉得这张卡没问题，GATE: PASS' })
+  const summary = store.evidenceSummary('C2')
+  check('自述被记录但标为非权威', summary.bySource['cto-narrative'] >= 1 && summary.excluded >= 1, JSON.stringify(summary))
+  const latest = store.latestEvidence('C2')
+  check('latestEvidence 只返回权威来源', latest?.source !== 'cto-narrative', 'source=' + latest?.source)
+
   // 9) 回执闸门：缺 RECEIPT 的写岗交付被 block
   const receiptGuard = makePostExecuteReceiptGuard({ store, config: { writerPresets: ['cto-builder'] } })
   const next = async () => ({ kind: 'accept' })

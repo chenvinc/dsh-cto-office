@@ -348,3 +348,49 @@ test('交叉核对：漏报、虚报、缺回执三种都要抓', () => {
   const aligned = crossCheckReceipt({ ...base, lastReceipt: { changed: ['api/a.ts'], scope: ['api/b.ts'] } }, facts)
   assert.equal(aligned.length, 0, 'changed ∪ scope 覆盖事实即对齐')
 })
+
+// ── W4 证据来源分级 ─────────────────────────────────────────────
+import { SOURCES, AUTHORITATIVE_SOURCES, classify, latestAuthoritative, summarize } from '../lib/evidence.js'
+
+test('证据分级：只有三类来源权威，自述与未知来源都不参与判定', () => {
+  assert.deepEqual([...AUTHORITATIVE_SOURCES], ['host-event', 'git-plumbing', 'subagent-session'])
+  assert.equal(classify(SOURCES.GIT).authoritative, true)
+  assert.equal(classify(SOURCES.CTO).authoritative, false)
+  assert.equal(classify(SOURCES.CTO).reason, 'self-report')
+  assert.equal(classify('rumor').authoritative, false, '未知来源 fail-closed')
+  assert.equal(classify(undefined).authoritative, false)
+
+  const ev = [
+    { source: SOURCES.GIT, at: 10, verdict: 'CHANGES' },
+    { source: SOURCES.CTO, at: 99, verdict: 'PASS' },   // 更新，但不算数
+  ]
+  assert.equal(latestAuthoritative(ev).verdict, 'CHANGES', '自述更新也不影响结论')
+  const s = summarize(ev)
+  assert.equal(s.total, 2)
+  assert.equal(s.excluded, 1)
+  assert.equal(s.bySource[SOURCES.CTO], 1)
+})
+
+test('卡仓库：自述写 PASS 不解锁结算，且被统计为排除项', () => {
+  const { dir, cleanup } = tmp()
+  try {
+    const store = new CardStore(dir)
+    const card = makeCard({ cardId: 'C1', authorization: { mode: 'rw', include: ['api/**'] }, baseSha: 'a', acceptance: ['A1 可跑'] })
+    card.artifactsVersion = { acceptance: 1 }
+    store.save(card)
+    store.transition(card, STATES.DISPATCHED); store.save(card)
+
+    // 先落一条真实 CHANGES
+    store.writeEvidence('C1', 'gate-1', { source: SOURCES.GIT, cardId: 'C1', verdict: 'CHANGES', at: 100 })
+    // 再写一条「自述 PASS」，时间更新
+    store.recordNote('C1', '我认为没问题 GATE: PASS')
+
+    const latest = store.latestEvidence('C1')
+    assert.equal(latest.verdict, 'CHANGES', '权威结论仍是 CHANGES')
+    assert.equal(latest.source, SOURCES.GIT)
+
+    const summary = store.evidenceSummary('C1')
+    assert.equal(summary.bySource[SOURCES.CTO], 1)
+    assert.equal(summary.excluded, 1)
+  } finally { cleanup() }
+})

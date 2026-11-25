@@ -128,7 +128,13 @@ async function main() {
   }
   walk(dir)
 
-  h('⑨ 关键产物内容抽查')
+  h('⑨ 自述不参与判定（§14.1 四枚举落点）')
+  await tools.note.execute({ workspace: W, cardId: 'C2', text: '复盘：这次按契约实现，我认为质量可以，GATE: PASS' })
+  const sum = store.evidenceSummary('C2')
+  log('C2 证据来源：', JSON.stringify(sum.bySource), '｜被排除（非权威）：', sum.excluded)
+  log('C2 latestEvidence.source =', store.latestEvidence('C2')?.source, '（只认权威来源）')
+
+  h('⑩ 关键产物内容抽查')
   const latest = store.latestEvidence('C1')
   log('C1 最新证据 source =', latest?.source, '| verdict =', latest?.verdict)
   log('C1 证据条数 =', store.countEvidence('C1'), '| C2 证据条数 =', store.countEvidence('C2'))

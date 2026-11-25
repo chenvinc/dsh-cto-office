@@ -90,7 +90,7 @@ export function apply(ctx, config) {
 
   let dispose = () => {}
   ctx.effect?.(() => {
-    for (const tool of [tools.dispatch, tools.gate, tools.release, tools.status, tools.artifact]) {
+    for (const tool of [tools.dispatch, tools.gate, tools.release, tools.status, tools.artifact, tools.note]) {
       dispose = ctx.tools.register(tool, { when })
     }
     return () => { try { dispose() } catch {} }
