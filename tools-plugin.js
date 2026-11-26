@@ -47,6 +47,8 @@ function resolveConfig(config) {
     cardsDir: typeof raw.cardsDir === 'string' && raw.cardsDir ? raw.cardsDir : DEFAULTS.cardsDir,
     supervisor: { ...DEFAULTS.supervisor, ...(raw.supervisor ?? {}) },
     exclusiveTtlMs: Number.isFinite(raw.exclusiveTtlMs) ? raw.exclusiveTtlMs : DEFAULTS.supervisor.exclusiveTtlMs,
+    // M-12 双门槛：阈值是参数不是常量（周期长度、样本门槛、连续周期数、各比率阈值都可调）。
+    metrics: raw.metrics && typeof raw.metrics === 'object' ? raw.metrics : {},
     patchApproval: { ...DEFAULTS.patchApproval, ...(raw.patchApproval ?? {}) },
   }
 }
