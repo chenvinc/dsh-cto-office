@@ -83,6 +83,30 @@ test('人工闸门：无审批 → deny；有未过期审批 → 放行；过期
   } finally { cleanup() }
 })
 
+test('人工闸门：bash 改 patch 也被拦（真机只验过 write/edit，这条补 bash 分支）', async () => {
+  const { dir, cleanup } = tmp()
+  try {
+    const approvalPath = join(dir, 'approval.json')
+    const config = { writerPresets: [], maxConcurrentWriters: 1, patchApproval: { path: approvalPath, ttlMs: 60_000 }, __dir: dir }
+
+    const denied = await runGuard(config, { name: 'bash', arguments: { command: 'sed -i "s/x/y/" cordis.patch.yml' } })
+    assert.equal(denied.kind, 'deny', 'bash 里改 patch 必须和 write/edit 一样被拦')
+    const cpDenied = await runGuard(config, { name: 'bash', arguments: { command: 'cp /tmp/new.yml cordis.patch.yml' } })
+    assert.equal(cpDenied.kind, 'deny')
+
+    // 只读命令不能被误伤：排障要看这个文件
+    const readOnly = await runGuard(config, { name: 'bash', arguments: { command: 'grep preset-cto cordis.patch.yml' } })
+    assert.equal(readOnly.kind, 'allow')
+    const diffRead = await runGuard(config, { name: 'bash', arguments: { command: 'git diff cordis.patch.yml' } })
+    assert.equal(diffRead.kind, 'allow')
+
+    // 有审批（未过期）时同一条命令放行
+    mintApproval({ path: approvalPath, reason: '测试闸门', ttlMs: 60_000 })
+    const allowed = await runGuard(config, { name: 'bash', arguments: { command: 'sed -i "s/x/y/" cordis.patch.yml' } })
+    assert.equal(allowed.kind, 'allow')
+  } finally { cleanup() }
+})
+
 test('人工闸门：审批文件缺失 / 坏 JSON / schema 不对，一律 fail-closed', () => {
   const { dir, cleanup } = tmp()
   try {
