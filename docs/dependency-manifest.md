@@ -2,7 +2,7 @@
 
 > 用途：本插件（`@swiper1881/dsh-cto-office`）v2.0 的设计建立在若干**非公开 API 与行号事实**上。DSH 每次 rc 升级都可能让它们失效。
 > 本文是**唯一台账**：每个依赖点写清「怎么定位 / 失效后果 / 兜底方案」。
-> 配套 `platform-probe`（见 §待建）把这些假设写成可执行断言，升级后跑一次即知哪些破了。
+> 配套 `platform-probe`（见 §三）把这些假设写成可执行断言，升级后跑一次即知哪些破了。
 >
 > 状态：骨架（2026-11-26 建立）。标记 `TBD` 的行需在 W0 实测时补齐行号与验证方式。
 
@@ -35,26 +35,54 @@
 
 每次 DSH rc 升级后：
 
-1. 跑 `platform-probe`（待建）：逐条断言上表可机检的项，输出 `PASS / FAIL / N-A`；
+1. 跑 `npm run probe`（见 §三）：逐条断言上表可机检的项，输出 `PASS / FAIL / N-A / INFO`；
 2. `FAIL` 项按“兜底方案”列降级，并把该行状态改为 `已降级（日期 / rc 版本）`；
 3. 跑 `npm run check` 与面板冒烟（`scripts/preview-liveboard.html` 的 10 个场景）；
 4. 把结果追加到 §四 变更记录。
 
-## 三、待建：`platform-probe`
+## 三、`platform-probe`（已建，M-6）
 
-放在 `index.js` 的 Host 半内，或独立 `scripts/platform-probe.mjs`（优先后者，避免污染运行时）。断言形态：
+```bash
+# 普通 Node：跑本机可检项（patch 边界、装载形态、本插件自身契约、清单完整性）
+npm run probe
 
-```js
-// 伪代码
-const checks = [
-  ['D6 pre-execute deny',  () => typeof ctx.tools.checkGuards === 'function'],
-  ['D8 post-execute block',() => /* 观察 PostToolDecision 是否接受 block */],
-  ['D14 agentOptions',     () => /* 子代理派工能否传入 model 并生效 */],
-  ['D16 sandboxRoot',      () => /* workspaceRoot 是否随会话 cwd 变化 */],
-];
+# 进 asar：额外检查宿主源码面（D5/D6/D8/D12/D15/D16、宿主包存在性）
+ELECTRON_RUN_AS_NODE=1 "/Applications/DeepSeek Harness.app/Contents/MacOS/DeepSeek Harness" \
+  scripts/platform-probe.mjs
 ```
 
-约定：**probe 只读，不改任何状态**；输出人可读表格 + 退出码（有 FAIL 则非 0）。
+**为什么有两种运行方式**：`picomatch`、`@deepseek-ai/*` 的源码都在 `app.asar` 归档内部，
+只有 App 自带的 Electron 的 Node fs 能读；普通 Node 下这些项一律标 `N-A`，
+**不猜成 PASS**（这正是 W0 追加五记下的教训：用错运行时去判断宿主能力，会得出反向结论）。
+
+状态含义：
+
+| 状态 | 含义 | 处理 |
+|---|---|---|
+| `PASS` | 假设成立 | 无 |
+| `FAIL` | 假设已破 | 按「兜底方案」列降级，并把该行状态改为 `已降级（日期 / rc 版本）`；退出码非 0 |
+| `N-A` | 当前环境检不了 | 换运行时再跑，或按环境限制接受 |
+| `INFO` | 成立但值得知道 | 例如 D9 worktree 已安装（二期可提前试）、D12 上游若补了 fsync 可删自实现 |
+
+探针自身也是**只读**的：不写 `.cto-office`、不改 profile、不装包。
+
+测点与清单的对应：
+
+| 探针 id | 清单项 | 说明 |
+|---|---|---|
+| `D1`–`D3` | D1–D3 | 客户端面只能做**静态源码断言**（弱）：确认注册面没被误删，不等于运行时生效 |
+| `D4-1`–`D4-3` | D4 | 只读岗 `write/edit` 被关、可写岗没被误关、`applyPatch:false` 计数 |
+| `D5`–`D8`、`D15`、`D16` | 同名 | 宿主源码面断言（需 Electron） |
+| `D9`–`D13`、`D20` | 同名 | 宿主包/可选包存在性（需 Electron） |
+| `D14-1` | D14 | patch 里 `modelSelection: true`（档位前提）；实际行为见 W0 ⑤⑥ |
+| `D19` | D19 | 宿主内应为 `picomatch`；普通 Node 下必然 `fallback`，标 `N-A` |
+| `ENV-1`–`ENV-3` | — | 装载形态（`link:`）、profile bundles、`engines.dsh` |
+| `SELF-1`–`SELF-3` | — | 本插件自身契约回归：M-12 双门槛默认值、M-2 intent schema、M-14 审批文件在工作区外 |
+| `DOC-1` | — | 本清单 D1–D20 无缺项（防丢项） |
+
+实测（2026-11-26，rc.5）：
+- 普通 Node：`PASS 13 · FAIL 0 · N-A 13 · INFO 1`
+- Electron：`PASS 25 · FAIL 0 · N-A 0 · INFO 2`（INFO = D9 worktree 已装、D3 宿主暂不校验）
 
 ## 四、变更记录
 
@@ -62,3 +90,4 @@ const checks = [
 |---|---|---|---|
 | 2026-11-26 | 0.2.2-rc.5 | 建立骨架；D12 已实测失效（npx rc.1 解析）；D16 已确证 | D12 自实现；其余待 W0 复验 |
 | 2026-11-26 | 0.2.2-rc.5 | W1 实现期复核：**D12 修正**——包可经安装锚点解析，但源码自认不提供 fsync；**新增 D19（picomatch 已接入）/ D20（timer 已接入）** | D12 保留自实现并写明偏离理由；D19/D20 改为「用系统的」 |
+| 2026-11-26 | 0.2.2-rc.5 | M-6 建立 `platform-probe`：普通 Node `PASS 13/FAIL 0/N-A 13`，Electron `PASS 25/FAIL 0/N-A 0` | 探针写入 `scripts/platform-probe.mjs`，`npm run probe`；清单加「测点对应」表 |

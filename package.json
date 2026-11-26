@@ -73,7 +73,8 @@
     "test": "node --test \"test/*.test.mjs\"",
     "e2e": "node scripts/e2e-w1.mjs",
     "rehearse": "node scripts/rehearse.mjs",
-    "fault": "node scripts/fault-injection.mjs"
+    "fault": "node scripts/fault-injection.mjs",
+    "probe": "node scripts/platform-probe.mjs"
   },
   "main": "./index.js"
 }
