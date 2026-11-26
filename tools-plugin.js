@@ -31,7 +31,9 @@ const DEFAULTS = {
   defaultAgentPreset: 'cto-builder',
   granularity: { maxFiles: 10, maxLines: 400, maxBehaviors: 1 },
   cardsDir: '.cto-office/cards',
-  supervisor: { enabled: true, pollIntervalMs: 15 * 60 * 1000, queuedAlertMs: 60 * 60 * 1000 },
+  supervisor: { enabled: true, pollIntervalMs: 15 * 60 * 1000, queuedAlertMs: 60 * 60 * 1000, exclusiveTtlMs: 45 * 60 * 1000 },
+  // M-14 第一处：改判定器本身需人工确认。审批文件在工作区之外（agent 写不到）。
+  patchApproval: { path: undefined, ttlMs: 30 * 60 * 1000 },
 }
 
 function resolveConfig(config) {
@@ -44,6 +46,8 @@ function resolveConfig(config) {
     granularity: { ...DEFAULTS.granularity, ...(raw.granularity ?? {}) },
     cardsDir: typeof raw.cardsDir === 'string' && raw.cardsDir ? raw.cardsDir : DEFAULTS.cardsDir,
     supervisor: { ...DEFAULTS.supervisor, ...(raw.supervisor ?? {}) },
+    exclusiveTtlMs: Number.isFinite(raw.exclusiveTtlMs) ? raw.exclusiveTtlMs : DEFAULTS.supervisor.exclusiveTtlMs,
+    patchApproval: { ...DEFAULTS.patchApproval, ...(raw.patchApproval ?? {}) },
   }
 }
 
@@ -59,6 +63,7 @@ export function apply(ctx, config) {
       sup = new Supervisor(registry.get(workspace), {
         pollIntervalMs: resolved.supervisor.pollIntervalMs,
         queuedAlertMs: resolved.supervisor.queuedAlertMs,
+        exclusiveTtlMs: resolved.exclusiveTtlMs,
       })
       supervisors.set(workspace, sup)
     }
