@@ -84,7 +84,11 @@ export function apply(ctx, config) {
   ctx.on('tools/pre-execute', makePreExecuteGuard({ registry, config: resolved }))
   ctx.on('tools/post-execute', makePostExecuteReceiptGuard({ registry, config: resolved }))
   // 子代理的最终回执随「完成通知」回来，不经过 post-execute —— 只能从会话事件里捡。
-  ctx.on('session/event', makeReceiptCollector({ registry }))
+  // P1 的来源校验需要「这个会话是哪个 preset」：cordis 对未 inject 的服务属性裸读会抛，
+  // 所以照例 try/catch 探测，拿不到就只记事实、不据此打回（判定留在 gate）。
+  let agentPresets
+  try { agentPresets = ctx.agentPresets } catch { agentPresets = undefined }
+  ctx.on('session/event', makeReceiptCollector({ registry, agentPresets }))
 
   let timer
   try { timer = ctx.timer } catch { timer = undefined }
