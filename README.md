@@ -59,28 +59,52 @@ office_release cardId=C1 action=settle
 ## 装与卸
 
 ```bash
-# 装（在 DSH 会话里用 plugin_manager 工具）
+# 从 npm 装（另一台机器推荐；开发版必须带 @alpha 或具体版本号）
+plugin_manager action=install_bundle target=@swiper1881/dsh-cto-office@0.4.0-alpha.1
+
+# 装本地目录（开发用，link: 指向本目录）
 plugin_manager action=install_bundle target=/Users/chy/个人工作台/cto-office
 
 # 卸
 plugin_manager action=remove_bundle target=@swiper1881/dsh-cto-office
 ```
 
+> **`latest` 指向旧正式版 `0.2.4`**。开发版走 `alpha` tag：`@alpha` 或写死 `0.4.0-alpha.1`，
+> 直接 `npm i @swiper1881/dsh-cto-office` 装到的不是这个版本。
+>
+> 装完若返回 `application: restart-required`（rc.5 下常见，未托管插件不热重载），
+> **退出并重开 DSH 应用**才生效——不是重开窗口。
+
 安装后：新建会话 → 模式选「CTO 办公室」。岗位预设不单独开会话用，它们是 CTO 派工的选项。
 
 ## 分享到另一台机器
 
-这个 bundle 只有 10 个文件、零 npm 依赖（patch 里引用的 `@deepseek-ai/*` 都由目标机器的 DSH 自己提供），所以换台机器只要让它能读到这个包：
+零 npm 依赖（patch 里引用的 `@deepseek-ai/*` 都由目标机器的 DSH 自己提供），所以换台机器只要让它能读到这个包。
+**最省事的是 npm**：
+
+```text
+# 对方机器：在 DSH 会话里装（开发版写 @alpha 或具体版本）
+plugin_manager action=install_bundle target=@swiper1881/dsh-cto-office@0.4.0-alpha.1
+```
+
+装不上时按下面的顺序排查：
+
+| 现象 | 原因 | 处理 |
+|---|---|---|
+| `No matching version` / 装到了 `0.2.4` | 没写版本，`latest` 还指向旧正式版 | 写 `@alpha` 或 `@0.4.0-alpha.1` |
+| `application: restart-required` | rc.5 下未托管插件不热重载 | 退出并重开 DSH 应用 |
+| 版本刚发布就查不到 | registry / npm 客户端缓存 | 用 `curl "https://registry.npmjs.org/@swiper1881%2Fdsh-cto-office?t=$(date +%s)"` 加缓存穿透核实 |
+| 兼容性警告 `unknown` | 对方 DSH 不是 `0.2.2-rc.3 ~ rc.5` | 本版本实测在 rc.5；更高版本未验证，建议对齐 rc.5 |
+
+没有 npm 也行——走 git（把 `<sha>` 换成 tag `v0.4.0-alpha.1` 或具体提交）：
 
 ```bash
-# 本机：推到自己的仓库
 git remote add origin git@github.com:<你的账号>/dsh-cto-office.git
-git push -u origin main
+git push -u origin main --tags
 ```
 
 ```text
-# 对方机器：在 DSH 会话里装（把 <sha> 换成具体提交，或直接用 main）
-plugin_manager action=install_bundle target=github:<你的账号>/dsh-cto-office#<sha>
+plugin_manager action=install_bundle target=github:<你的账号>/dsh-cto-office#v0.4.0-alpha.1
 ```
 
 装完按同样三步验收：`list_bundles` 里能看到 `@swiper1881/dsh-cto-office` 且 `overrides` 含 `agent-team`；新建会话的模式列表里有「CTO 办公室」；在 CTO 会话里派一次 `cto-reviewer`，确认它看不到 `write`/`edit`。
