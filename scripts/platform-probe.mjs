@@ -161,6 +161,28 @@ async function checkSelf() {
   const { INTENT_SCHEMA } = await import('../lib/intent.js')
   add('SELF-2', 'M-2 事务 schema 存在（判定可恢复的前提）', INTENT_SCHEMA ? 'PASS' : 'FAIL', INTENT_SCHEMA)
 
+  // SELF-4：用**宿主自己的校验器**验我们的工具 schema。
+  // 写错一处不是「面板少个按钮」，而是「整个 preset 起不来」——真机已经踩过一次
+  // （type: ['number','null'] → JsonSchemaError → CTO 在模式选择里消失）。
+  if (!canReadHost) {
+    add('SELF-4', '工具 schema 通过宿主真校验器', 'N-A', HOST_HINT)
+  } else {
+    const hostSchema = await import(join(ASAR_DSH, 'node_modules/@deepseek-ai/dsh-tools/lib/types/json-schema.js'))
+    const { buildTools } = await import('../lib/tools.js')
+    const tools = buildTools({}, { registry: { get: () => ({}) }, config: {} })
+    const rejected = []
+    for (const [name, tool] of Object.entries(tools)) {
+      for (const [kind, schema] of [['parameters', tool.parameters], ['output', tool.output?.schema]]) {
+        if (!schema) continue
+        try { hostSchema.assertSupportedJsonSchema(schema) } catch (error) {
+          rejected.push(`${name}.${kind}: ${String(error.message).slice(0, 100)}`)
+        }
+      }
+    }
+    add('SELF-4', '工具 schema 通过宿主真校验器', rejected.length ? 'FAIL' : 'PASS',
+      rejected.length ? rejected.join('；') : `${Object.keys(tools).length} 个工具 × 2 类 schema 全部通过`)
+  }
+
   const { defaultApprovalPath } = await import('../lib/patch-approval.js')
   const approval = defaultApprovalPath()
   add('SELF-3', 'M-14 审批文件在工作区之外', approval.startsWith(ROOT) ? 'FAIL' : 'PASS', approval)
