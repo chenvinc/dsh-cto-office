@@ -78,11 +78,16 @@ ELECTRON_RUN_AS_NODE=1 "/Applications/DeepSeek Harness.app/Contents/MacOS/DeepSe
 | `D19` | D19 | 宿主内应为 `picomatch`；普通 Node 下必然 `fallback`，标 `N-A` |
 | `ENV-1`–`ENV-3` | — | 装载形态（`link:`）、profile bundles、`engines.dsh` |
 | `SELF-1`–`SELF-3` | — | 本插件自身契约回归：M-12 双门槛默认值、M-2 intent schema、M-14 审批文件在工作区外 |
+| `SELF-4` | — | **权威**：用宿主自己的 `assertSupportedJsonSchema` 验 7 工具 × 2 类 schema（需 Electron） |
+| `SELF-5` | — | **预检 `apply()`**：模拟 cordis 严格 ctx + 宿主 schema 校验，跑一遍插件注册（拦「重启后 preset 起不来」） |
 | `DOC-1` | — | 本清单 D1–D20 无缺项（防丢项） |
 
 实测（2026-11-26，rc.5）：
-- 普通 Node：`PASS 13 · FAIL 0 · N-A 13 · INFO 1`
-- Electron：`PASS 25 · FAIL 0 · N-A 0 · INFO 2`（INFO = D9 worktree 已装、D3 宿主暂不校验）
+- 普通 Node：`PASS 14 · FAIL 0 · N-A 14 · INFO 1`
+- Electron：`PASS 27 · FAIL 0 · N-A 0 · INFO 2`（INFO = D9 worktree 已装、D3 宿主暂不校验）
+
+> `SELF-4` / `SELF-5` 是「CTO 预设整条消失」事故之后加的：schema 写错一处就会让挂插件的
+> preset 起不来，而且**没有日志**。现在这两条在重启之前就能拦下来。
 
 ## 四、变更记录
 

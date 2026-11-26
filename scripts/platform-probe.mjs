@@ -183,6 +183,46 @@ async function checkSelf() {
       rejected.length ? rejected.join('；') : `${Object.keys(tools).length} 个工具 × 2 类 schema 全部通过`)
   }
 
+  // SELF-5：预检 apply() —— 按宿主加载本插件的方式跑一遍：
+  //   - 未 inject 的服务属性裸读会抛（用 Proxy 模拟 cordis）
+  //   - tools.register 按宿主的 schema 校验规则检查
+  // 这一条能直接拦住「改完、重启、才发现 preset 起不来」的事故（真机已发生过一次）。
+  try {
+    const plugin = await import('../tools-plugin.js')
+    const hostSchema = canReadHost
+      ? await import(join(ASAR_DSH, 'node_modules/@deepseek-ai/dsh-tools/lib/types/json-schema.js'))
+      : null
+    const registered = []
+    const fake = new Proxy({
+      tools: {
+        register(tool) {
+          if (!tool?.name) throw new Error('tool without name')
+          if (!tool.parameters) throw new Error(`${tool.name}: missing parameters`)
+          if (hostSchema) {
+            hostSchema.assertSupportedJsonSchema(tool.parameters)
+            if (tool.output?.schema) hostSchema.assertObjectJsonSchema(tool.output.schema)
+          }
+          registered.push(tool.name)
+          return () => {}
+        },
+      },
+      on() { return () => {} },
+      effect(fn) { const dispose = fn(); return () => { try { dispose?.() } catch {} } },
+      log: { warn() {}, info() {}, error() {} },
+    }, {
+      get(target, key) {
+        if (key in target) return target[key]
+        // cordis 语义：未 inject 的服务属性裸读直接抛 —— 预检必须模拟这一点
+        throw new Error(`cannot get property "${String(key)}" without inject`)
+      },
+    })
+    plugin.apply(fake, { maxConcurrentWriters: 1, writerPresets: ['cto-builder'], defaultAgentPreset: 'cto-builder' })
+    add('SELF-5', '预检 apply()：插件能注册全部工具', 'PASS',
+      `${registered.length} 个工具${hostSchema ? '（schema 已过宿主校验）' : ''}：${registered.join(', ')}`)
+  } catch (error) {
+    add('SELF-5', '预检 apply()：插件能注册全部工具', 'FAIL', `apply 抛错：${error.message}`)
+  }
+
   const { defaultApprovalPath } = await import('../lib/patch-approval.js')
   const approval = defaultApprovalPath()
   add('SELF-3', 'M-14 审批文件在工作区之外', approval.startsWith(ROOT) ? 'FAIL' : 'PASS', approval)
