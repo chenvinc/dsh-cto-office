@@ -31,9 +31,40 @@ const DEFAULTS = {
   defaultAgentPreset: 'cto-builder',
   granularity: { maxFiles: 10, maxLines: 400, maxBehaviors: 1 },
   cardsDir: '.cto-office/cards',
-  supervisor: { enabled: true, pollIntervalMs: 15 * 60 * 1000, queuedAlertMs: 60 * 60 * 1000, exclusiveTtlMs: 45 * 60 * 1000 },
+  // 三段超时合成一个监督器（方案 §14.5）：阈值全是参数，且支持扁平老写法。
+  supervisor: {
+    enabled: true,
+    pollIntervalMs: 15 * 60 * 1000,
+    queuedAlert: { thresholdMs: 60 * 60 * 1000, escalateAfter: 2 },
+    exclusiveTtl: { thresholdMs: 45 * 60 * 1000 },
+    cardIdleReclaim: { thresholdMs: 120 * 60 * 1000 },
+  },
   // M-14 第一处：改判定器本身需人工确认。审批文件在工作区之外（agent 写不到）。
   patchApproval: { path: undefined, ttlMs: 30 * 60 * 1000 },
+}
+
+/**
+ * 监督器配置：嵌套写法优先，同时兼容老的扁平键（queuedAlertMs / exclusiveTtlMs / escalateAfter）。
+ * 阈值是参数不是常量 —— 这份解析是**唯一**归一化点，看板与监督器都从这里取。
+ */
+function resolveSupervisor(rawSupervisor, rawRoot = {}) {
+  const raw = rawSupervisor && typeof rawSupervisor === 'object' ? rawSupervisor : {}
+  const base = DEFAULTS.supervisor
+  return {
+    enabled: raw.enabled !== false,
+    pollIntervalMs: Number.isFinite(raw.pollIntervalMs) ? raw.pollIntervalMs : base.pollIntervalMs,
+    queuedAlert: {
+      thresholdMs: raw.queuedAlert?.thresholdMs ?? (Number.isFinite(raw.queuedAlertMs) ? raw.queuedAlertMs : base.queuedAlert.thresholdMs),
+      escalateAfter: raw.queuedAlert?.escalateAfter ?? (Number.isFinite(raw.escalateAfter) ? raw.escalateAfter : base.queuedAlert.escalateAfter),
+    },
+    exclusiveTtl: {
+      thresholdMs: raw.exclusiveTtl?.thresholdMs
+        ?? (Number.isFinite(raw.exclusiveTtlMs) ? raw.exclusiveTtlMs : Number.isFinite(rawRoot.exclusiveTtlMs) ? rawRoot.exclusiveTtlMs : base.exclusiveTtl.thresholdMs),
+    },
+    cardIdleReclaim: {
+      thresholdMs: raw.cardIdleReclaim?.thresholdMs ?? (Number.isFinite(raw.cardIdleReclaimMs) ? raw.cardIdleReclaimMs : base.cardIdleReclaim.thresholdMs),
+    },
+  }
 }
 
 function resolveConfig(config) {
@@ -45,7 +76,7 @@ function resolveConfig(config) {
     defaultAgentPreset: typeof raw.defaultAgentPreset === 'string' && raw.defaultAgentPreset ? raw.defaultAgentPreset : DEFAULTS.defaultAgentPreset,
     granularity: { ...DEFAULTS.granularity, ...(raw.granularity ?? {}) },
     cardsDir: typeof raw.cardsDir === 'string' && raw.cardsDir ? raw.cardsDir : DEFAULTS.cardsDir,
-    supervisor: { ...DEFAULTS.supervisor, ...(raw.supervisor ?? {}) },
+    supervisor: resolveSupervisor(raw.supervisor, raw),
     exclusiveTtlMs: Number.isFinite(raw.exclusiveTtlMs) ? raw.exclusiveTtlMs : DEFAULTS.supervisor.exclusiveTtlMs,
     // M-12 双门槛：阈值是参数不是常量（周期长度、样本门槛、连续周期数、各比率阈值都可调）。
     metrics: raw.metrics && typeof raw.metrics === 'object' ? raw.metrics : {},
@@ -64,8 +95,9 @@ export function apply(ctx, config) {
     if (!sup) {
       sup = new Supervisor(registry.get(workspace), {
         pollIntervalMs: resolved.supervisor.pollIntervalMs,
-        queuedAlertMs: resolved.supervisor.queuedAlertMs,
-        exclusiveTtlMs: resolved.exclusiveTtlMs,
+        queuedAlert: resolved.supervisor.queuedAlert,
+        exclusiveTtl: resolved.supervisor.exclusiveTtl,
+        cardIdleReclaim: resolved.supervisor.cardIdleReclaim,
       })
       supervisors.set(workspace, sup)
     }
