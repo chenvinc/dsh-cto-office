@@ -17,6 +17,7 @@ import { makePreExecuteGuard } from './lib/guards.js'
 import { makePostExecuteReceiptGuard } from './lib/receipt-guard.js'
 import { makeReceiptCollector } from './lib/receipt-collector.js'
 import { Supervisor } from './lib/supervisor.js'
+import { resolveRoleModels } from './lib/role-models.js'
 
 export const name = 'cto-office-tools'
 
@@ -41,6 +42,10 @@ const DEFAULTS = {
   },
   // M-14 第一处：改判定器本身需人工确认。审批文件在工作区之外（agent 写不到）。
   patchApproval: { path: undefined, ttlMs: 30 * 60 * 1000 },
+  // M-7 可落地部分：岗位 → 模型/档位。默认表见 lib/role-models.js；这里只放覆盖项。
+  // enforceRoleModels=false 可临时关掉校验（不推荐，等于让岗位表变成建议）。
+  roleModels: {},
+  enforceRoleModels: true,
 }
 
 /**
@@ -81,11 +86,19 @@ function resolveConfig(config) {
     // M-12 双门槛：阈值是参数不是常量（周期长度、样本门槛、连续周期数、各比率阈值都可调）。
     metrics: raw.metrics && typeof raw.metrics === 'object' ? raw.metrics : {},
     patchApproval: { ...DEFAULTS.patchApproval, ...(raw.patchApproval ?? {}) },
+    roleModels: raw.roleModels && typeof raw.roleModels === 'object' ? raw.roleModels : {},
+    enforceRoleModels: raw.enforceRoleModels !== false,
   }
 }
 
 export function apply(ctx, config) {
   const resolved = resolveConfig(config)
+  // 岗位表解析一次：坏项打印出来但不阻断启动（宁可少管，不要管错）。
+  const roleModelResolution = resolveRoleModels(resolved.roleModels)
+  resolved.roleModelTable = roleModelResolution.table
+  for (const problem of roleModelResolution.problems) {
+    try { ctx.log?.warn?.(`cto-office: 岗位模型表配置有问题，已忽略该项 —— ${problem}`) } catch {}
+  }
   const registry = new StoreRegistry({ cardsDir: resolved.cardsDir })
 
   const supervisors = new Map()

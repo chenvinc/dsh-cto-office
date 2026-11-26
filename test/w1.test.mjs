@@ -12,7 +12,20 @@ import { matchGlob, matchAny, isAuthorized, normalizePath } from '../lib/glob.js
 import { STATES, canTransition, isTerminal, makeCard, judge, IllegalTransitionError } from '../lib/card.js'
 import { CardStore } from '../lib/store.js'
 import { isDestructiveGit, targetPreset, makePreExecuteGuard } from '../lib/guards.js'
+import { resolveRoleModels, routeForPreset } from '../lib/role-models.js'
 import { writeOnceJson, replaceJson, readJsonStrict, CorruptError } from '../lib/atomic.js'
+
+/** 派工时该带的路由：守卫按岗位表校验，测试必须像真实派工一样带上。 */
+const ROLES = resolveRoleModels({}).table
+const routeArgs = preset => {
+  const route = routeForPreset(ROLES, preset)
+  if (!route) return {}
+  return {
+    provider: route.provider,
+    model: route.model,
+    ...(route.reasoning_effort ? { reasoning_effort: route.reasoning_effort } : {}),
+  }
+}
 
 const tmp = () => {
   const dir = mkdtempSync(join(tmpdir(), 'cto-w1-'))
@@ -108,9 +121,9 @@ test('守卫：名额满时拒「别的卡」的写岗派工，只读岗放行',
     const guard = makePreExecuteGuard({ registry: { all: () => [store] }, config: { maxConcurrentWriters: 1, writerPresets: ['cto-builder'], defaultAgentPreset: 'cto-builder' } })
     const next = async () => ({ kind: 'allow' })
 
-    const deny = await guard({ name: 'subagent', arguments: { agent_preset: 'cto-builder', prompt: '【任务卡 C9】x' } }, next)
+    const deny = await guard({ name: 'subagent', arguments: { agent_preset: 'cto-builder', ...routeArgs('cto-builder'), prompt: '【任务卡 C9】x' } }, next)
     assert.equal(deny.kind, 'deny')
-    const allow = await guard({ name: 'subagent', arguments: { agent_preset: 'cto-qa', prompt: '【任务卡 C1】审一下' } }, next)
+    const allow = await guard({ name: 'subagent', arguments: { agent_preset: 'cto-qa', ...routeArgs('cto-qa'), prompt: '【任务卡 C1】审一下' } }, next)
     assert.equal(allow.kind, 'allow', '只读岗不占写者名额')
     assert.equal(targetPreset({ agent_preset: 'cto-builder' }), 'cto-builder')
     assert.equal(targetPreset({ agentPreset: 'cto-qa' }), 'cto-qa')
@@ -318,7 +331,7 @@ test('回执闸门：只校验「确有回执」的文本，绝不为没有回�
     const registry = { all: () => [store] }
     const guard = makePostExecuteReceiptGuard({ registry, config: { writerPresets: ['cto-builder'] } })
     const next = async () => ({ kind: 'accept' })
-    const subagent = text => ({ name: 'subagent', arguments: { agent_preset: 'cto-builder', prompt: '【任务卡 C1】x' } })
+    const subagent = text => ({ name: 'subagent', arguments: { agent_preset: 'cto-builder', ...routeArgs('cto-builder'), prompt: '【任务卡 C1】x' } })
 
     // 真机反馈 ③：`subagent` 立即返回的是「started subagent X」受理回执，不能因此 block
     const accepted = await guard(subagent('started subagent worker-c1'), { content: [{ type: 'text', text: 'started subagent worker-c1' }] }, next)
@@ -334,9 +347,9 @@ test('回执闸门：只校验「确有回执」的文本，绝不为没有回�
     assert.match(bad.feedback.map(b => b.text).join('\n'), /RECEIPT/)
 
     // 只读岗与非卡号派工一律放行
-    const ro = await guard({ name: 'subagent', arguments: { agent_preset: 'cto-qa', prompt: '【任务卡 C1】x' } }, { content: [{ type: 'text', text: '无' }] }, next)
+    const ro = await guard({ name: 'subagent', arguments: { agent_preset: 'cto-qa', ...routeArgs('cto-qa'), prompt: '【任务卡 C1】x' } }, { content: [{ type: 'text', text: '无' }] }, next)
     assert.equal(ro.kind, 'accept')
-    const noCard = await guard({ name: 'subagent', arguments: { agent_preset: 'cto-builder', prompt: '随便看看' } }, { content: [{ type: 'text', text: '无' }] }, next)
+    const noCard = await guard({ name: 'subagent', arguments: { agent_preset: 'cto-builder', ...routeArgs('cto-builder'), prompt: '随便看看' } }, { content: [{ type: 'text', text: '无' }] }, next)
     assert.equal(noCard.kind, 'accept')
   } finally { cleanup() }
 })
@@ -495,10 +508,10 @@ test('守卫：持锁那张卡自己派工必须放行（否则单卡永远开�
     const guard = makePreExecuteGuard({ registry, config: { maxConcurrentWriters: 1, writerPresets: ['cto-builder'] } })
     const next = async () => ({ kind: 'allow' })
 
-    const own = await guard({ name: 'subagent', arguments: { agent_preset: 'cto-builder', prompt: '【任务卡 C2】x' } }, next)
+    const own = await guard({ name: 'subagent', arguments: { agent_preset: 'cto-builder', ...routeArgs('cto-builder'), prompt: '【任务卡 C2】x' } }, next)
     assert.equal(own.kind, 'allow', '派工的就是持锁卡 → 放行')
 
-    const other = await guard({ name: 'subagent', arguments: { agent_preset: 'cto-builder', prompt: '【任务卡 C9】x' } }, next)
+    const other = await guard({ name: 'subagent', arguments: { agent_preset: 'cto-builder', ...routeArgs('cto-builder'), prompt: '【任务卡 C9】x' } }, next)
     assert.equal(other.kind, 'deny', '别的卡号 → 拒绝')
   } finally { cleanup() }
 })
@@ -518,7 +531,7 @@ test('守卫：省略 agent_preset 按默认写岗处理，不能借此绕过名
     const noPreset = await guard({ name: 'subagent', arguments: { prompt: '【任务卡 C9】x' } }, next)
     assert.equal(noPreset.kind, 'deny', '不写 preset 也要按写岗拦')
 
-    const unnamed = await guard({ name: 'subagent', arguments: { agent_preset: 'cto-builder', prompt: '随便派' } }, next)
+    const unnamed = await guard({ name: 'subagent', arguments: { agent_preset: 'cto-builder', ...routeArgs('cto-builder'), prompt: '随便派' } }, next)
     assert.equal(unnamed.kind, 'deny', '没写卡号也拦，并提示补标记')
     assert.match(unnamed.reason, /【任务卡/)
   } finally { cleanup() }
@@ -534,7 +547,7 @@ test('守卫：QUEUED 卡派工提示先启动', async () => {
     queued.blockedBy = { cardId: 'C1', reason: 'serial-limit' }
     store.save(queued)
     const guard = makePreExecuteGuard({ registry: { all: () => [store] }, config: { maxConcurrentWriters: 1, writerPresets: ['cto-builder'] } })
-    const decision = await guard({ name: 'subagent', arguments: { agent_preset: 'cto-builder', prompt: '【任务卡 C2】x' } }, async () => ({ kind: 'allow' }))
+    const decision = await guard({ name: 'subagent', arguments: { agent_preset: 'cto-builder', ...routeArgs('cto-builder'), prompt: '【任务卡 C2】x' } }, async () => ({ kind: 'allow' }))
     assert.equal(decision.kind, 'deny')
     assert.match(decision.reason, /QUEUED/)
   } finally { cleanup() }

@@ -19,8 +19,16 @@ import { buildTools } from '../lib/tools.js'
 import { STATES } from '../lib/card.js'
 import { makePostExecuteReceiptGuard } from '../lib/receipt-guard.js'
 import { makePreExecuteGuard } from '../lib/guards.js'
+import { resolveRoleModels, routeForPreset } from '../lib/role-models.js'
 
 const results = []
+
+// 派工要带岗位路由：M-7 起 pre-execute 会校验（模型按岗位定，不许悄悄继承父路由）。
+const ROLES = resolveRoleModels({}).table
+const routeFor = preset => {
+  const route = routeForPreset(ROLES, preset)
+  return route ? { provider: route.provider, model: route.model, reasoning_effort: route.reasoning_effort } : {}
+}
 const check = (name, ok, detail = '') => {
   results.push({ name, ok, detail })
   console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}${detail ? ' — ' + detail : ''}`)
@@ -67,12 +75,12 @@ async function main() {
   // 1b) 真机反馈 P0「开卡即自锁」：持锁卡自己派工必须放行
   const slotGuard = makePreExecuteGuard({ registry, config: { maxConcurrentWriters: 1, writerPresets: ['cto-builder'], defaultAgentPreset: 'cto-builder' } })
   const ownDispatch = await slotGuard(
-    { name: 'subagent', arguments: { agent_preset: 'cto-builder', prompt: '【任务卡 C1】导入 API' } },
+    { name: 'subagent', arguments: { agent_preset: 'cto-builder', ...routeFor('cto-builder'), prompt: '【任务卡 C1】导入 API' } },
     async () => ({ kind: 'allow' }),
   )
   check('持锁卡自己的派工放行（不自锁）', ownDispatch.kind === 'allow')
   const otherDispatch = await slotGuard(
-    { name: 'subagent', arguments: { agent_preset: 'cto-builder', prompt: '【任务卡 C9】别人' } },
+    { name: 'subagent', arguments: { agent_preset: 'cto-builder', ...routeFor('cto-builder'), prompt: '【任务卡 C9】别人' } },
     async () => ({ kind: 'allow' }),
   )
   check('别的卡号仍被名额拦下', otherDispatch.kind === 'deny')
@@ -145,7 +153,7 @@ async function main() {
     '- gaps: 无',
   ].join('\n')
   const receiptDecision = await receiptGuard2(
-    { name: 'subagent', arguments: { agent_preset: 'cto-builder', prompt: '【任务卡 C2】x' } },
+    { name: 'subagent', arguments: { agent_preset: 'cto-builder', ...routeFor('cto-builder'), prompt: '【任务卡 C2】x' } },
     { content: [{ type: 'text', text: c2Receipt }] },
     async () => ({ kind: 'accept' }),
   )
@@ -186,19 +194,19 @@ async function main() {
   // 真机反馈 ③：subagent 立即返回的是「受理回执」，不能因此 block；只有文本里确有
   // 不合规 RECEIPT 时才打回。缺回执由 office_gate 的 receipt-missing 兜住。
   const accepted = await receiptGuard(
-    { name: 'subagent', arguments: { agent_preset: 'cto-builder', prompt: '【任务卡 C2】x' } },
+    { name: 'subagent', arguments: { agent_preset: 'cto-builder', ...routeFor('cto-builder'), prompt: '【任务卡 C2】x' } },
     { content: [{ type: 'text', text: 'started subagent worker' }] },
     next,
   )
   check('受理回执不拦（避免吞掉派工）', accepted.kind === 'accept')
   const blocked = await receiptGuard(
-    { name: 'subagent', arguments: { agent_preset: 'cto-builder', prompt: '【任务卡 C2】x' } },
+    { name: 'subagent', arguments: { agent_preset: 'cto-builder', ...routeFor('cto-builder'), prompt: '【任务卡 C2】x' } },
     { content: [{ type: 'text', text: 'RECEIPT:\n- card: C9\n- changed: a.ts' }] },
     next,
   )
   check('回执不合规 → block', blocked.kind === 'block')
   const readOnly = await receiptGuard(
-    { name: 'subagent', arguments: { agent_preset: 'cto-qa', prompt: '【任务卡 C2】x' } },
+    { name: 'subagent', arguments: { agent_preset: 'cto-qa', ...routeFor('cto-qa'), prompt: '【任务卡 C2】x' } },
     { content: [{ type: 'text', text: '无回执' }] },
     next,
   )

@@ -248,11 +248,12 @@ test('office_dashboard：返回三块 + 人类可读摘要，指标判据与 M-1
     const res = await tools.dashboard.execute({ workspace: dir })
     assert.equal(res.day, dayLabelOf(Date.now()))
     assert.equal(res.counts.inFlight, 1)
-    // fixture 的「昨日」= 11-25 10:00；相对**真实 now** 就是昨天，所以 2 次判定入窗，
-    // 今天那次（fixture now）与注入样本都不算。
-    assert.equal(res.gate.judged, 2, '只算昨日、只算真实样本')
-    assert.equal(res.gate.pass, 1)
-    assert.equal(res.gate.changes, 1)
+    // 工具层的「昨日」按**真实 now** 切，所以这里不断言具体次数（会随运行日期漂移）；
+    // 日期窗口的精确行为由上面的 buildDashboard 用例显式传 now 验证。
+    assert.equal(res.gate.day, dayLabelOf(previousDayStartOf(Date.now())))
+    assert.equal(typeof res.gate.judged, 'number')
+    assert.equal(res.gate.judged, res.gate.pass + res.gate.changes, '计数必须自洽')
+    assert.equal(res.counts.realCards, 2, '注入样本不计入真实卡数')
     assert.equal(res.inFlight[0].cardId, 'C1')
     assert.match(res.message, /判据：数据不足/)
     assert.equal(store.list().cards.length, 3, '看板不创建/删除卡')
