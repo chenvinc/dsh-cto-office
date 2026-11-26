@@ -1,6 +1,6 @@
 {
   "name": "@swiper1881/dsh-cto-office",
-  "version": "0.3.0-alpha.1",
+  "version": "0.4.0-alpha.1",
   "description": "CTO 办公室模式：一名 CTO 带六个岗位（架构师、工程师、评审、QA、UI/UX 设计、业务）的 agent 预设集合",
   "type": "module",
   "license": "MIT",
@@ -40,7 +40,10 @@
     "index.js",
     "client.js",
     "README.md",
-    "tools-plugin.js"
+    "tools-plugin.js",
+    "!docs/cto-office-v2.0-汇报.pdf",
+    "!docs/cto-office-v2.0-汇报.html",
+    "!docs/cto-office-v2.0-汇报-批注.md"
   ],
   "engines": {
     "dsh": ">=0.2.2-rc.3",
@@ -55,7 +58,8 @@
         "0.2.2-rc.1": "unknown",
         "0.2.2-rc.2": "unknown",
         "0.2.2-rc.3": "compatible",
-        "0.2.2-rc.4": "compatible"
+        "0.2.2-rc.4": "compatible",
+        "0.2.2-rc.5": "compatible"
       },
       "profiles": [
         "web"
