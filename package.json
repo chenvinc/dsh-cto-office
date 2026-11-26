@@ -69,10 +69,11 @@
   "scripts": {
     "sync": "node scripts/sync-office-data.mjs",
     "check": "node scripts/sync-office-data.mjs --check",
-    "prepublishOnly": "npm run check && npm test && npm run e2e && npm run rehearse",
+    "prepublishOnly": "npm run check && npm test && npm run e2e && npm run rehearse && npm run fault",
     "test": "node --test \"test/*.test.mjs\"",
     "e2e": "node scripts/e2e-w1.mjs",
-    "rehearse": "node scripts/rehearse.mjs"
+    "rehearse": "node scripts/rehearse.mjs",
+    "fault": "node scripts/fault-injection.mjs"
   },
   "main": "./index.js"
 }
