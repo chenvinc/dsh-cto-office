@@ -4,7 +4,7 @@
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync, appendFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -542,7 +542,7 @@ test('守卫：QUEUED 卡派工提示先启动', async () => {
 
 // ── git 路径转义回归（C4）：非 ASCII 路径必须原样返回 ──────────────
 import { execFileSync } from 'node:child_process'
-import { headSha, collectFacts, diffEntries } from '../lib/git.js'
+import { headSha, collectFacts, diffEntries, statusEntries, diffLines } from '../lib/git.js'
 
 test('git: 非 ASCII 路径不被 core.quotePath 转义（中文路径原样返回）', async () => {
   const { dir, cleanup } = tmp()
@@ -578,5 +578,67 @@ test('git: 非 ASCII 路径不被 core.quotePath 转义（中文路径原样返�
     writeFileSync(join(dir, '未跟踪.md'), 'x\n')
     const withUntracked = await collectFacts(dir, baseSha)
     assert.ok(withUntracked.untracked.includes('未跟踪.md'), JSON.stringify(withUntracked.untracked))
+  } finally { cleanup() }
+})
+
+// ── 真机第三轮补充：-z 解析与去重摘要 ────────────────────────────
+function makeRepoWith(entries) {
+  const dir = mkdtempSync(join(tmpdir(), 'cto-git-'))
+  const git = (...args) => execFileSync('git', args, { cwd: dir, stdio: 'pipe' })
+  git('init', '-q'); git('config', 'user.email', 't@t'); git('config', 'user.name', 't')
+  writeFileSync(join(dir, '.gitignore'), '.cto-office/\n')
+  for (const [name, content] of entries) {
+    mkdirSync(join(dir, name, '..'), { recursive: true })
+    writeFileSync(join(dir, name), content)
+  }
+  git('add', '-A'); git('commit', '-qm', 'init')
+  return { dir, git, cleanup: () => rmSync(dir, { recursive: true, force: true }) }
+}
+
+
+test('git：文件名含制表符也不会让解析错位（-z）', async () => {
+  const name = 'weird\tname.md'
+  const { dir, git, cleanup } = makeRepoWith([[name, 'a\n']])
+  try {
+    const base = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: dir, encoding: 'utf8' }).trim()
+    appendFileSync(join(dir, name), 'b\n')
+    git('add', '-A'); git('commit', '-qm', 'update')
+    const entries = await diffEntries(dir, base)
+    assert.deepEqual(entries.map(e => e.path), [name], '含制表符的名字要完整取到')
+  } finally { cleanup() }
+})
+
+test('git：忽略 .cto-office 前缀仍然生效（-z 路径）', async () => {
+  const { dir, cleanup } = makeRepoWith([['a.ts', 'x\n']])
+  try {
+    mkdirSync(join(dir, '.cto-office', 'cards'), { recursive: true })
+    writeFileSync(join(dir, '.cto-office', 'cards', 'x.json'), '{}')
+    const status = await statusEntries(dir)
+    assert.equal(status.length, 0, '.cto-office 不应出现在判定事实里')
+  } finally { cleanup() }
+})
+
+test('回执去重：结构相同但正文不同的两份回执都要入账', async () => {
+  const { dir, cleanup } = tmp()
+  try {
+    const store = new CardStore(dir)
+    const { makeReceiptCollector } = await import('../lib/receipt-collector.js')
+    const card = makeCard({ cardId: 'C1', authorization: { mode: 'rw', include: ['a.ts'] }, baseSha: 'a', acceptance: ['A1 ok'] })
+    card.artifactsVersion = { acceptance: 1 }
+    store.save(card)
+    const collector = makeReceiptCollector({ registry: { all: () => [store] } })
+    const ev = text => ({ type: 'assistant/message', data: { content: [{ type: 'text', text }] } })
+    const receipt = verdict => [
+      'RECEIPT:', '- card: C1', '- artifactsVersion: acceptance=1', '- changed: a.ts',
+      '- acceptance:', `  - A1 ${verdict} 证据：pnpm test → 1 passed`,
+      'SELF-CHECK:', '- build: 无', '- tests: 无', '- scope: a.ts', '- gaps: 无',
+    ].join('\n')
+
+    collector({}, ev(receipt('PASS')))
+    collector({}, ev(receipt('PASS')))
+    assert.equal(store.countEvidence('C1'), 1, '同一份回执重复到达只记一次')
+
+    collector({}, ev(receipt('PASS').replace('证据：pnpm test → 1 passed', '证据：评审复核 1 passed')))
+    assert.equal(store.countEvidence('C1'), 2, '正文不同的回执不能被误去重')
   } finally { cleanup() }
 })
