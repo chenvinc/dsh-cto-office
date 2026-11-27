@@ -130,6 +130,13 @@ plugin_manager action=install_bundle target=github:<你的账号>/dsh-cto-office
 
 ## 已知边界
 
+- **模型路由口径（2026-11-27）**：默认表全部只用 OpenCode Go 上游（`owned_by=opencode-go`），不跨厂商、不接外部 CLI agent；映射、降级阶梯与子代理白名单见 [docs/模型映射-OpenCode-Go-本机可用路由.md](docs/模型映射-OpenCode-Go-本机可用路由.md)。`docs/W10-实现记录.md` 与 `docs/交接-下一会话.md` 记的是 11-26 的历史口径，未回改。
+- **章程与 CD 阶段（一/二/三期已落地）**：`skills/cto-office/SKILL.md` 新增 §八「方案对与拍板」、§九「上线子流程」与铁律 8–10；CD 状态机与持久化在 `lib/cd.js`（独立于卡状态机，证据只新建永不覆盖）。二期补 `office_cd`（模式 A：CTO 用 `bash` 跑 `gh`，stdout 作 `evidence`）、R5–R9 守卫与 `scripts/approve-phase.mjs`（拍板 / 不可逆动作两份人工审批，文件在工作区之外）。三期补 `lib/cd-gh.js`（固化的 `gh` 命令契约 + stdout 结构化解析，铁律 3 会打回「声明与事实不符」）、`lib/cd-watch.js` + CD 巡检定时器（**只读告警**，不推进状态、不跑 `gh`）、右栏 CD chip，并修了 `inferStep` 永不返回 `open-card` 的 D1 缺陷。设计与分期见 [docs/章程与CD阶段改造-设计稿.md](docs/章程与CD阶段改造-设计稿.md)。改 `cordis.patch.yml` 的 `office-tools` 配置后必须 `npm run sync` 重生成 facts，再 `npm run check`。
+
+  **边界**：按已拍板的模式 A / 策略 A，这不是「无人值守自动上线」——`gh` 命令由 CTO 用 `bash` 执行，`merge`/`release` 前仍需人跑一次 `approve-phase.mjs`；定时器只负责在 CD 卡住时发日志告警。
+- **`.cto-office/` 被 `.gitignore` 忽略时，`office_gate` 判不到它**（实测）：`git diff baseSha..HEAD` 与 `git status --porcelain` 双读都会跳过被忽略路径。只验证隔离目录里的产物时，改用证据脚本（`sha256` / `stat` mtime+大小）自证，别指望 `office_gate` 给结论；它管的是**授权清单内的源码改动**。
+- **派工的两个平台硬前置**（实测，已写进章程 §四/§五）：`team_task` 必须 `claim → in_progress → complete`，`pending` 不能直接 `complete`；root 自己 `claim` 的 owner 是 `lead`，要让卡面显示成员名需补一次 `reassign`。`subagent` 派工还必须显式带 `provider` / `model` / `reasoning_effort`，只给 `agent_preset` 会被岗位路由守卫拒绝。
+- **`-free` 路由不可信**（2026-11-27 实测）：`minimax-m3.1-flash-free` 不在 Go 订阅里（网关 400）、`longcat-2.5-free` 已 deprecated（410），只有 `hy4-flash-free` 可用。**目录 / `list_subagent_models()` / 白名单里有某条模型 ≠ 订阅能出词**——DSH 的 route preflight 查不到这一层，表现是「能创建子代理、一执行就 `failed before it finished`」。换机器 / 换套餐 / 改映射后先跑 `node scripts/probe-role-models.mjs` 逐条验，再放行白名单。取证表见 [docs/模型映射-OpenCode-Go-本机可用路由.md](docs/模型映射-OpenCode-Go-本机可用路由.md)。
 - 成员是子代理会话，不是 24 小时常驻身份；同一会话内可以用 `send_message` 续聊，跨会话没有记忆。
 - `bash` 本身能写文件，所以只读岗的边界是「没有 write/edit 工具」+ 章程铁律两层，不是内核级沙盒。
 - `write_scopes` 是提示不是锁；冲突靠 `revision` CAS 和 CTO 的分片纪律避免。

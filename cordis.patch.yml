@@ -148,6 +148,22 @@
                 maxFiles: 10
                 maxLines: 400
                 maxBehaviors: 1
+              # 二期 · CD 阶段（设计稿 §4.6）。策略 A：merge / release 必须人工确认；
+              # 完全自动未实施，不留 autoApprove 开关，免得变成死配置。
+              cd:
+                maxReviewRounds: 2
+                releaseWorkflow: ''
+                healthUrl: ''
+                # 三期：CD 巡检定时器（只读告警，不推进状态、不跑 gh）。
+                checksPollIntervalMs: 60000
+                staleAfterMs: 300000
+              # 拍板关口：审批文件在工作区之外，由人生成（见 scripts/approve-phase.mjs）。
+              planApproval:
+                enabled: true
+                ttlMs: 1800000
+              # 不可逆动作审批（策略 A，始终生效）。
+              cdApproval:
+                ttlMs: 1800000
 
     # ── 架构师 ────────────────────────────────────────────────────────────
 # 设计意图（推断，作者未记录）：挂 tool-web（选型要查仓库外资料）、不挂 tool-jobs（调研不该转后台失联）；不挂 write/edit 属只读岗。

@@ -17,6 +17,8 @@ import { makePreExecuteGuard } from './lib/guards.js'
 import { makePostExecuteReceiptGuard } from './lib/receipt-guard.js'
 import { makeReceiptCollector } from './lib/receipt-collector.js'
 import { Supervisor } from './lib/supervisor.js'
+import { CdStore } from './lib/cd.js'
+import { CdWatcher } from './lib/cd-watch.js'
 import { resolveRoleModels } from './lib/role-models.js'
 
 export const name = 'cto-office-tools'
@@ -42,6 +44,19 @@ const DEFAULTS = {
   },
   // M-14 第一处：改判定器本身需人工确认。审批文件在工作区之外（agent 写不到）。
   patchApproval: { path: undefined, ttlMs: 30 * 60 * 1000 },
+  // 二期 · CD 阶段（设计稿 §4.6）。策略 A：不可逆动作必须人工确认，完全自动未实施。
+  cd: {
+    maxReviewRounds: 2,
+    releaseWorkflow: '',
+    healthUrl: '',
+    // 三期：CD 巡检定时器（只读告警，不推进状态、不跑 gh）。
+    checksPollIntervalMs: 60 * 1000,
+    staleAfterMs: 5 * 60 * 1000,
+  },
+  // 拍板关口：默认关闭，由 profile patch 显式开启（否则会截走既有守卫单测）。
+  planApproval: { enabled: false, path: undefined, ttlMs: 30 * 60 * 1000 },
+  // 不可逆动作审批（策略 A，始终生效）。
+  cdApproval: { path: undefined, ttlMs: 30 * 60 * 1000 },
   // M-7 可落地部分：岗位 → 模型/档位。默认表见 lib/role-models.js；这里只放覆盖项。
   // enforceRoleModels=false 可临时关掉校验（不推荐，等于让岗位表变成建议）。
   roleModels: {},
@@ -86,6 +101,9 @@ function resolveConfig(config) {
     // M-12 双门槛：阈值是参数不是常量（周期长度、样本门槛、连续周期数、各比率阈值都可调）。
     metrics: raw.metrics && typeof raw.metrics === 'object' ? raw.metrics : {},
     patchApproval: { ...DEFAULTS.patchApproval, ...(raw.patchApproval ?? {}) },
+    cd: { ...DEFAULTS.cd, ...(raw.cd ?? {}) },
+    planApproval: { ...DEFAULTS.planApproval, ...(raw.planApproval ?? {}) },
+    cdApproval: { ...DEFAULTS.cdApproval, ...(raw.cdApproval ?? {}) },
     roleModels: raw.roleModels && typeof raw.roleModels === 'object' ? raw.roleModels : {},
     enforceRoleModels: raw.enforceRoleModels !== false,
   }
@@ -148,6 +166,23 @@ export function apply(ctx, config) {
       }
     }, resolved.supervisor.pollIntervalMs)
     ctx.effect?.(() => stop)
+  }
+
+  // 三期 · CD 巡检：只读扫描 cd.json，对停在 pending / BLOCKED 太久的 run 发日志告警。
+  // 不写状态、不跑 gh —— 模式 A 下推进由 CTO 用 bash + office_cd 完成（设计稿 §9 备注 3）。
+  if (timer && typeof timer.interval === 'function' && resolved.cd.checksPollIntervalMs > 0) {
+    const cdWatcher = new CdWatcher({ staleAfterMs: resolved.cd.staleAfterMs })
+    const stopCd = timer.interval(() => {
+      for (const workspace of registry.workspaces()) {
+        try {
+          const { records } = new CdStore(workspace).list()
+          for (const alert of cdWatcher.tick(records)) {
+            try { ctx.log?.warn?.(`cto-office/cd: ${alert.message}`) } catch {}
+          }
+        } catch {}
+      }
+    }, resolved.cd.checksPollIntervalMs)
+    ctx.effect?.(() => stopCd)
   }
 }
 

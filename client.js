@@ -633,6 +633,12 @@ var OFFICE_FACTS = {
     '.co-gate-btn:hover{border-color:var(--co-accent);color:var(--co-text)}',
     '.co-gate-btn:focus-visible{outline:2px solid var(--co-accent);outline-offset:2px}',
     '.co-g-num{display:none}',
+    /* 三期 · CD chip：只显示最近一次 CD: 行的阶段/轮次，与 GATE chip 并排。
+     * 与 lib/cd.js:cdLine / parseCdLine 是同一协议，改那边要同步改这里的正则。 */
+    '.co-cd{display:inline-flex;align-items:center;gap:4px;flex:none;font:10px var(--co-mono);border:1px solid var(--co-line-2);border-radius:999px;padding:1px 7px;color:var(--co-muted);white-space:nowrap}',
+    '.co-cd[data-cd-state="VERIFIED"]{color:var(--co-ok);border-color:color-mix(in srgb,var(--co-ok) 50%,transparent)}',
+    '.co-cd[data-cd-state="BLOCKED"],.co-cd[data-cd-state="ABORTED"]{color:var(--co-bad);border-color:color-mix(in srgb,var(--co-bad) 50%,transparent)}',
+    '.co-cd[data-cd-state="CHECKS"],.co-cd[data-cd-state="REVIEW"]{color:var(--co-warn);border-color:color-mix(in srgb,var(--co-warn) 50%,transparent)}',
     '.co-fallback{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;gap:10px;justify-content:flex-start;padding:16px 14px}',
     '.co-fallback-msg{margin:0;font:11.5px/1.5 var(--co-mono);color:var(--co-muted);overflow-wrap:anywhere;max-height:7.5em;overflow:auto}',
     '.co-retry{align-self:flex-start;appearance:none;border:1px solid var(--co-accent);background:color-mix(in srgb,var(--co-accent-text) 10%,transparent);color:var(--co-accent-text);border-radius:999px;padding:4px 14px;font:11.5px inherit;cursor:pointer}',
@@ -986,8 +992,34 @@ var OFFICE_FACTS = {
         return gate
       }
 
+      /* 三期 · CD 阶段 chip 的事件解析。协议见 lib/cd.js:cdLine / parseCdLine：
+       * 一行 `CD: <STATE> run=<runId> round=<n>`，倒序取最后一条。 */
+      function cdOfText(text) {
+        var lines = String(text || '').split(/\r?\n/).map(function (line) { return line.trim() }).filter(Boolean)
+        for (var i = lines.length - 1; i >= 0; i -= 1) {
+          var m = /^CD:\s+([A-Z_]+)\s+run=(\S+)\s+round=(\d+)/.exec(lines[i])
+          if (m) return { state: m[1], runId: m[2], round: m[3] }
+        }
+        return null
+      }
+
+      function eventCd(event) {
+        if (event.type !== 'assistant/message' && event.type !== 'tool/result') return null
+        return cdOfText(textOf(event.data))
+      }
+
+      function cdStatusOf(events) {
+        var snap = null
+        for (var i = 0; i < events.length; i += 1) {
+          var c = eventCd(events[i])
+          if (c) snap = c
+        }
+        return snap
+      }
+
       function inferStep(events, gate) {
         var dispatch = false
+        var openCard = false
         var follow = false
         var settled = false
         var sawUser = false
@@ -998,6 +1030,9 @@ var OFFICE_FACTS = {
           if (e.type === 'tool/call') {
             var n = str(e.data && e.data.name)
             if (n === 'subagent' || n === 'subagent_fork') dispatch = true
+            /* D1 修复：office_dispatch / team_task_create 是「开卡/派活单」，
+             * 之前没有任何分支返回 open-card，第 2 格永远不亮。 */
+            if (n === 'office_dispatch' || n === 'team_task_create') openCard = true
             if (n === 'wait_agent' || n === 'list_agents' || n === 'send_message' || n === 'job_output') follow = true
           }
           if (e.type === 'tool/result' && /\b(wait_agent|list_agents|send_message|job_output)\b/.test(textOf(e.data))) follow = true
@@ -1011,6 +1046,7 @@ var OFFICE_FACTS = {
         }
         if (follow) return 'follow'
         if (dispatch) return 'dispatch'
+        if (openCard) return 'open-card'
         if (sawUser) return 'clarify'
         return ''
       }
@@ -1645,6 +1681,7 @@ var OFFICE_FACTS = {
         }
         var root = rootPreset()
         var gateTok = safe(function () { return gateStatusOf(events) }, '')
+        var cdSnap = safe(function () { return cdStatusOf(events) }, null)
         var confirmState = safe(function () { return confirmStateOf(events) }, { pending: false, id: '' })
         var needsConfirm = confirmState.pending
         var state = rootFault ? 'degraded' : (!ref ? 'empty' : (events.length && !running ? 'ended' : 'live'))
@@ -1880,6 +1917,14 @@ var OFFICE_FACTS = {
                 h('span', null, h('b', null, gateCount), ' 道闸'),
                 gatePending ? h('span', { className: 'co-sep', 'aria-hidden': 'true' }, '·') : null,
                 gatePending ? h('span', { className: 'co-pending', 'data-pending-gates': String(gatePending) }, gatePending + ' 待判定') : null,
+                /* 三期 · CD chip：只读展示最近一次 CD: 行，不参与判定。 */
+                cdSnap ? h('span', { className: 'co-sep', 'aria-hidden': 'true' }, '·') : null,
+                cdSnap ? h('span', {
+                  className: 'co-cd',
+                  'data-cd-state': cdSnap.state,
+                  'data-cd-run': cdSnap.runId,
+                  title: '最近一次 CD 阶段：' + cdSnap.state + ' · run=' + cdSnap.runId + ' · round=' + cdSnap.round
+                }, 'CD ' + cdSnap.state + ' · r' + cdSnap.round) : null,
                 h('span', { className: 'co-sep', 'aria-hidden': 'true' }, '·'),
                 h('span', { title: '最近一轮：最后一条用户消息 → 其后最后一条助手消息；未配对显示 —', 'data-elapsed': elapsed || '—' }, h('b', null, elapsed || '—'))
               )
