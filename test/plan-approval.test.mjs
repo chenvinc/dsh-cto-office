@@ -36,7 +36,7 @@ const tmp = () => {
 }
 
 /** 建一个带审批文件路径的 fixture；cards 里可预置卡状态与工件。 */
-function setup({ cards = [], acceptance = [], approvalPath, userQuestions } = {}) {
+function setup({ cards = [], acceptance = [], approvalPath, userQuestions, getUserQuestions } = {}) {
   const { dir, cleanup } = tmp()
   const path = approvalPath ?? join(dir, 'approvals', 'plan.json')
   const registry = new StoreRegistry({ cardsDir: '.cto-office/cards' })
@@ -62,6 +62,7 @@ function setup({ cards = [], acceptance = [], approvalPath, userQuestions } = {}
     maxConcurrentWriters: 1,
     enforceRoleModels: false,
     userQuestions,
+    ...getUserQuestions ? { getUserQuestions } : {},
   }
   const tools = buildTools({}, { registry, config })
   const guard = makePreExecuteGuard({ registry: { all: () => [store] }, store, config })
@@ -250,5 +251,23 @@ test('office_status：输出拍板关口的配置快照', async () => {
     const on = await s.tools.status.execute({ workspace: s.dir })
     assert.match(on.message, /拍板关口：enabled/)
     assert.match(on.message, /覆盖卡 C1/)
+  } finally { s.cleanup() }
+})
+
+
+// ── 9. alpha.5 回归：服务经 getter 延迟解析 ──────────────────────────
+
+test('office_plan_approve：userQuestions 经 getter 解析（不是只有直接传对象才生效）', async () => {
+  const uq = fakeQuestions('批准派实现卡（推荐）')
+  const s = setup({ acceptance: ['G1'], getUserQuestions: () => uq })
+  try {
+    const result = await s.tools.planApprove.execute({
+      workspace: s.dir,
+      cardIds: ['G1'],
+      summary: '采用方案 A：补隔离库后全量回填，保留遗留文档不提交',
+    }, {})
+    assert.equal(result.approved, true)
+    assert.equal(uq.calls.length, 1)
+    assert.equal((await s.guard(implDispatch('G1'), ALLOW)).kind, 'allow')
   } finally { s.cleanup() }
 })

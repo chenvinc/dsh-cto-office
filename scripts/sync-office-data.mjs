@@ -538,7 +538,9 @@ function injectClient(clientText, facts) {
 
 function readInput(file) {
   try {
-    return fs.readFileSync(file, 'utf8');
+    // 统一行尾：Windows 上 core.autocrlf=true 检出的是 CRLF，而下面所有解析器都按 \n 切行。
+    // 不归一会出现「预设数量 0 ≠ 7」这类假故障（2026-11-28 alpha.5 在 Windows 真机复现）。
+    return fs.readFileSync(file, 'utf8').replace(/\r\n/g, '\n');
   } catch {
     fail('FILE', path.relative(ROOT, file) + ' 不存在或不可读');
   }

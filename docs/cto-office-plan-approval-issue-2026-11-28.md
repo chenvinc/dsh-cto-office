@@ -748,3 +748,55 @@ issue 的 P0-A 建议「给 agent 一个 `office_plan_approve`，由它 mint 凭
 
 > 旧的 `ask` 行为已不存在；如果仍看到 `the user rejected tool`，说明桌面端还在跑 alpha.3，
 > 用 `office_status` 的版本行或 `package.json` 核对。
+
+---
+
+## 14. 修复记录追加（2026-11-28 深夜，`0.4.0-alpha.5`）
+
+### 14.1 真机现象
+
+alpha.4 上线后，真实 CTO 会话调用 `office_plan_approve` 稳定返回：
+
+```text
+拿不到 userQuestions 服务，无法弹出人工确认（这个 profile 没挂 user-questions seam）。
+```
+
+人工确认弹不出来，R6 仍然 deny 实现卡；用户只能回到终端跑 `approve-phase.mjs` 兜底。
+
+### 14.2 根因（issue 诊断被推翻）
+
+不是 profile 没挂 seam：`@deepseek-ai/dsh-base` 的 `cordis.patch.yml:79-80` 全局挂了 `user-questions`；同一 CTO 预设里的 `tool-ask-user` 声明了 `inject: ['tools','userQuestions']` 且一直可用，就是证据。
+
+真正原因是 **cordis 4 的服务可见性**：
+
+- `tools-plugin.js` 只 `inject = ['tools']`，却在 `apply()` 里裸读 `ctx.userQuestions`；
+- cordis 4 的 context 代理对未 inject 的服务属性直接抛 `cannot get property "userQuestions" without inject`（`cordis/src/reflect.ts:152`），被 `try/catch` 吞掉后缓存成 `undefined`；
+- 于是 `lib/tools.js` 的 `office_plan_approve` 必然走 `!userQuestions` 分支，错误文案还把这个锅甩给 profile。
+
+同一反模式还静默打死了三处：
+
+| 能力 | 症状 |
+|---|---|
+| `ctx.timer` | 探测恒为 `undefined` → 监督器 15 分钟巡检与 CD 巡检**从未启动**，QUEUED 滞留 / 锁 TTL / 卡 idle 回收告警从未产生 |
+| `ctx.agentPresets` | 探测恒为 `undefined` → 回执 P1 来源校验恒为 `presetVerified=false` |
+| `ctx.log` | DSH 用的是 `ctx.logger`；`ctx.log?.warn?.()` 在属性访问即抛，被 catch 吞掉 → 插件全程无日志 |
+
+### 14.3 修法
+
+1. 新增 `lib/service-probe.js`：`optionalService(ctx, name)` 用 `ctx.get(name)`（DSH 的官方无 inject 读取入口）读可选服务；
+2. `tools-plugin.js`：`userQuestions` 改为 getter 延迟解析（服务可能被 HMR 替换），`agentPresets` / `timer` 同样走 `optionalService`，日志改 `ctx.logger`；
+3. `lib/tools.js`：`office_plan_approve` 通过 `config.getUserQuestions()` 取服务；错误文案不再甩锅 profile；`office_status` 增加 `userQuestions seam：可用/不可用` 快照；
+4. `lib/receipt-collector.js`：支持 getter 传法；
+5. **不把 `userQuestions` 放进 `inject`**：缺 seam 时整个插件（含 R6 守卫）会停在 PENDING、`apply` 不执行 —— 守卫静默消失是 fail-open，比工具报错危险。
+
+### 14.4 验收
+
+- `test/service-probe.test.mjs`：验证 `optionalService` 在「属性裸读抛错」的 context 上仍能经 `ctx.get` 拿到服务；
+- `test/tools-plugin-wiring.test.mjs`：用真实 `apply()` 装配 + 模拟 cordis 未 inject 语义，证明 `office_plan_approve` 能弹卡并落凭据；
+- `test/plan-approval.test.mjs`：补一条 getter 解析用例；
+- 真机：`office_plan_approve` 弹出 plan-review 卡片；批准后 `office_status` 显示覆盖卡与有效期；`office_status` 的 seam 行显示「可用」。
+
+### 14.5 安装形态调整（本次一并做）
+
+- **Windows（主力开发机）**：profile 里改为 `link:` 到 `D:\dev\plugins\dsh-cto-office`（junction），改代码后重启 DSH 即生效，不再需要发版/重装。
+- **Mac**：改为从 npm 安装发布版（不再 symlink 到本地 clone），与 Windows 的开发仓库解耦。

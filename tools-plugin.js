@@ -20,6 +20,7 @@ import { Supervisor } from './lib/supervisor.js'
 import { CdStore } from './lib/cd.js'
 import { CdWatcher } from './lib/cd-watch.js'
 import { resolveRoleModels } from './lib/role-models.js'
+import { optionalService } from './lib/service-probe.js'
 
 export const name = 'cto-office-tools'
 
@@ -115,16 +116,22 @@ export function apply(ctx, config) {
   const roleModelResolution = resolveRoleModels(resolved.roleModels)
   resolved.roleModelTable = roleModelResolution.table
   for (const problem of roleModelResolution.problems) {
-    try { ctx.log?.warn?.(`cto-office: 岗位模型表配置有问题，已忽略该项 —— ${problem}`) } catch {}
+    try { ctx.logger?.warn?.(`cto-office: 岗位模型表配置有问题，已忽略该项 —— ${problem}`) } catch {}
   }
   const registry = new StoreRegistry({ cardsDir: resolved.cardsDir })
 
   // 拍板工具要用 userQuestions seam 弹真实人工确认（2026-11-28 P0 修复）。
-  // 照例探测式读取：拿不到就保持 undefined，工具会报错并给终端兜底命令，
-  // **绝不**退化成「无确认直接 mint 凭据」。不把它放进 inject，避免整个 preset 因缺服务而激活失败。
-  let userQuestions
-  try { userQuestions = ctx.userQuestions } catch { userQuestions = undefined }
-  resolved.userQuestions = userQuestions
+  //
+  // 2026-11-28 alpha.5 真机修复：不能裸读 ctx.userQuestions。cordis 4 的 context
+  // 代理只对 inject 里的服务开放，未 inject 会抛
+  // cannot get property "userQuestions" without inject，catch 后永远是 undefined，
+  // 于是工具稳定报「拿不到 userQuestions 服务」，还把这个锅甩给 profile。
+  // 正确写法是 ctx.get(name)（DSH 自己在 dsh-agent-instructions 里就这么读 fs）。
+  //
+  // 也不能把 userQuestions 放进 inject：缺 seam 时整个插件（含 R6 守卫与回执守卫）
+  // 会停在 PENDING、apply 根本不执行 —— 守卫静默消失是 fail-open，比工具报错危险。
+  // 所以：保持可选依赖，延迟到 execute 时再读；读不到就 fail-closed。
+  resolved.getUserQuestions = () => optionalService(ctx, 'userQuestions')
 
   const supervisors = new Map()
   const supervisorFor = workspace => {
@@ -154,20 +161,23 @@ export function apply(ctx, config) {
   ctx.on('tools/pre-execute', makePreExecuteGuard({ registry, config: resolved }))
   ctx.on('tools/post-execute', makePostExecuteReceiptGuard({ registry, config: resolved }))
   // 子代理的最终回执随「完成通知」回来，不经过 post-execute —— 只能从会话事件里捡。
-  // P1 的来源校验需要「这个会话是哪个 preset」：cordis 对未 inject 的服务属性裸读会抛，
-  // 所以照例 try/catch 探测，拿不到就只记事实、不据此打回（判定留在 gate）。
-  let agentPresets
-  try { agentPresets = ctx.agentPresets } catch { agentPresets = undefined }
-  ctx.on('session/event', makeReceiptCollector({ registry, agentPresets }))
+  // P1 的来源校验需要「这个会话是哪个 preset」。与 userQuestions 同一类坑：
+  // cordis 4 下裸读 ctx.agentPresets 必抛，alpha.5 之前这段探测一直拿到 undefined。
+  // 改用 ctx.get，并传 getter 而不是快照 —— 服务被 HMR/重载替换后仍能拿到当前实现。
+  ctx.on('session/event', makeReceiptCollector({
+    registry,
+    getAgentPresets: () => optionalService(ctx, 'agentPresets'),
+  }))
 
-  let timer
-  try { timer = ctx.timer } catch { timer = undefined }
+  // 同 userQuestions：cordis 4 下 ctx.timer 也必须走 ctx.get。
+  // alpha.5 之前这段探测一直拿到 undefined —— 监督器巡检与 CD 巡检从未启动过。
+  const timer = optionalService(ctx, 'timer')
   if (resolved.supervisor.enabled !== false && timer && typeof timer.interval === 'function') {
     const stop = timer.interval(() => {
       for (const workspace of registry.workspaces()) {
         try {
           for (const alert of supervisorFor(workspace).tick()) {
-            try { ctx.log?.warn?.(alert.message) } catch {}
+            try { ctx.logger?.warn?.(alert.message) } catch {}
           }
         } catch {}
       }
@@ -184,7 +194,7 @@ export function apply(ctx, config) {
         try {
           const { records } = new CdStore(workspace).list()
           for (const alert of cdWatcher.tick(records)) {
-            try { ctx.log?.warn?.(`cto-office/cd: ${alert.message}`) } catch {}
+            try { ctx.logger?.warn?.(`cto-office/cd: ${alert.message}`) } catch {}
           }
         } catch {}
       }

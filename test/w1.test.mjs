@@ -609,7 +609,7 @@ function makeRepoWith(entries) {
 }
 
 
-test('git：文件名含制表符也不会让解析错位（-z）', async () => {
+test('git：文件名含制表符也不会让解析错位（-z）', { skip: process.platform === 'win32' ? 'Win32 文件名不允许控制字符（制表符）' : false }, async () => {
   const name = 'weird\tname.md'
   const { dir, git, cleanup } = makeRepoWith([[name, 'a\n']])
   try {
