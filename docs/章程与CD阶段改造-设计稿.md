@@ -418,3 +418,13 @@ PR_OPEN ──review(PASS)──► CHECKS ──checks(success)──► MERGED
 `gh` 命令由 CTO 用 `bash` 执行，`merge`/`release` 前仍需人跑一次 `approve-phase.mjs`；
 定时器只负责卡住时发日志告警。要做到原图那种全自动，需要改决策 2/3（策略 B + 模式 B），
 那是一次独立的安全评审，不在本次范围。
+
+7. **拍板关口从 `ask` 改为「工具内人工确认 + `deny` 机检」**（2026-11-28，`0.4.0-alpha.4`）。
+   §4.3 原设计让 R6 返回 `ask`，理由写进 `reason`；但 DSH 在 ask 策略下只把 outcome 交给模型
+   （`the user rejected tool "<name>"`），插件原因被吞，且「聊天里已拍板」与「工作区外审批文件」
+   两套语义没有桥接，真实项目里表现为 P0 阻塞。现在：
+   - 人工确认搬进新工具 `office_plan_approve`（内部 `userQuestions.ask` + `intent:'plan-review'`）；
+   - 批准后由 Host 写凭据，绑定 `cardIds` 与契约/验收版本，TTL 内有效；
+   - R6 只做机检，失败返回 **`deny`**，把「缺凭据 / 已过期 / 卡不在覆盖范围」原样告诉模型。
+   这条改动的完整来龙去脉与验收对照见 `docs/cto-office-plan-approval-issue-2026-11-28.md` 与 §13。
+   实现层面 `ask` 决策在 cto-office 里**已不再使用**（保留 `ask` 语义给真正的单次权限场景）。

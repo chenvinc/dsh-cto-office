@@ -196,14 +196,15 @@ test('R5：方案卡必须 ro + cto-architect', async () => {
   } finally { s.cleanup() }
 })
 
-test('R6：未拍板派实现卡 → ask；mint 审批后放行', async () => {
+test('R6：未拍板派实现卡 → deny 且原因可执行；mint 审批后放行', async () => {
   const s = setup()
   try {
     const guard = guardFor({ ...s, config: { ...s.config, planApproval: { enabled: true, path: s.config.planApproval.path } } })
     const impl = { name: 'subagent', arguments: { agent_preset: 'cto-builder', prompt: '【任务卡 C1】实现' } }
-    const asked = await guard(impl, ALLOW)
-    assert.equal(asked.kind, 'ask')
-    assert.match(asked.reason, /拍板前不许派实现卡/)
+    const denied = await guard(impl, ALLOW)
+    assert.equal(denied.kind, 'deny')
+    assert.match(denied.reason, /拍板未通过/)
+    assert.match(denied.reason, /office_plan_approve/)
 
     mintApproval({ path: s.config.planApproval.path, reason: '已拍板' })
     const allowed = await guard(impl, ALLOW)

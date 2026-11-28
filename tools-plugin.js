@@ -119,6 +119,13 @@ export function apply(ctx, config) {
   }
   const registry = new StoreRegistry({ cardsDir: resolved.cardsDir })
 
+  // 拍板工具要用 userQuestions seam 弹真实人工确认（2026-11-28 P0 修复）。
+  // 照例探测式读取：拿不到就保持 undefined，工具会报错并给终端兜底命令，
+  // **绝不**退化成「无确认直接 mint 凭据」。不把它放进 inject，避免整个 preset 因缺服务而激活失败。
+  let userQuestions
+  try { userQuestions = ctx.userQuestions } catch { userQuestions = undefined }
+  resolved.userQuestions = userQuestions
+
   const supervisors = new Map()
   const supervisorFor = workspace => {
     if (resolved.supervisor.enabled === false) return undefined

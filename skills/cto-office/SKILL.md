@@ -34,7 +34,7 @@ description: CTO 办公室章程。带这支六人团队（架构师、工程师
 
    - 需要「两份独立方案」时，开一张 `ro` 方案卡派 `cto-architect`；CTO 自己那份不落卡。合成结论写进 `contracts` 工件，逐条写明「采纳了谁 / 没采纳的为什么」，见第八节。
    - 定接口与逐条编号的验收标准：`office_artifact action=write kind=contracts|acceptance`；进行期禁改工件，要改就作废重开。
-   - 用户拍板前不许派实现卡（人工关口，见第八节）。
+   - 用户拍板用 `office_plan_approve`（它会弹真实人工确认并落凭据）；未拍板前派实现卡会被 `deny` 并说明原因（见第八节）。
 
 3. **派工**。`subagent` + `agent_preset`，把卡的完整内容写进 prompt——子代理看不到你的对话历史。并行只在你确认写入范围不重叠时开。
 
@@ -70,7 +70,8 @@ description: CTO 办公室章程。带这支六人团队（架构师、工程师
 7. **范围守卫**。成员顺手改了卡外的东西，退回；不许"顺手重构"。
 8. **两份方案必须来自不同路由**。岗位表已把 `cto-architect` 固定到 `auto/gemini-4-argon`、主控固定在 `opencode-go/hy4`；发现两张方案卡同路由，视为无效方案对，重派。
 9. **CD 不许跳步**。`office_cd` 的 action 只能按第九节顺序推进；跳过 checks 直接 merge、review 第 3 轮再派回，一律 deny。
-10. **拍板前不派实现卡，合并/发布前先问人**。本次采用策略 A（人工确认）；完全自动未实施。
+10. **拍板前不派实现卡，合并/发布前先问人**。拍板走 `office_plan_approve`（真实人工确认 + 落凭据），
+    合并/发布走 `approve-phase.mjs --kind cd`；本次采用策略 A（人工确认），完全自动未实施。
 
 ## 四、任务板
 
@@ -140,9 +141,24 @@ description: CTO 办公室章程。带这支六人团队（架构师、工程师
   互不阻塞。不许 CTO 自己再写一份冒充第二方案，也不许把两张方案卡都派同一个 preset。
 - **逐条对比、合成一份**：写进 `contracts` 工件（复用现有类型，不新增工件种类），冻结版本；
   每条写「采纳了谁 / 没采纳的为什么」。这份工件同时是后面接口契约与验收标准的对照物。
-- **拍板（人工关口）**：用 `ask_user_question` 一次给出合成方案与关键取舍；未确认前
-  `pre-execute` 拒绝「实现卡」的 `office_dispatch` / `subagent`（返回 `ask`，不是 `deny`）。
-  这一步对应图里的「我 · 拍板」，**不自动化**。
+- **拍板（人工关口）**：调用 **`office_plan_approve`**，不要在聊天里用 `ask_user_question` 代替它。
+  这个工具会自己弹一次真实的拍板确认（plan-review 界面），用户点「批准」后由 Host 写入审批凭据，
+  覆盖你传的 `cardIds`，TTL 默认 30 分钟。参数：
+
+  ```
+  office_plan_approve(
+    workspace: "<绝对路径>",
+    cardIds: ["SC-4a"],            // 本轮要派的实现卡，必须逐张列全
+    summary: "<方案与关键取舍>"     // 给用户看的方案摘要，也是审批留痕
+  )
+  ```
+
+  - 拍板前每张卡必须已有 `acceptance` 工件（逐条编号的验收标准），否则工具直接拒绝——没有对照物不许派。
+  - 用户点「先不批准」→ 不写凭据，**不要重复弹同一个确认**；先按意见改方案再重新拍板。
+  - 拿不到 `userQuestions` 服务时工具会报错并给出终端兜底命令（`node scripts/approve-phase.mjs --kind plan --card <卡号> --reason "..."`），
+    这条路只是兜底，不是常规流程。
+  - 从未拍板就去派实现卡，`pre-execute` 会返回 **`deny`** 并原样写出原因（缺凭据 / 已过期 / 卡不在覆盖范围）
+    ——那是给你看的可执行提示，不是用户拒绝。照提示补拍板即可。
 - **出设计稿 → 审交互和文案 → 取舍改稿**：拍板后派 `cto-ux`（Argon，可用 `read_image` 看设计稿），
   审回执用 `send_message` 让同一子代理续聊改稿；CTO 取舍后定稿接口与验收标准。
 - **派活单**：`team_task_create`（`blocked_by` / `write_scopes`）或 `office_dispatch`；
